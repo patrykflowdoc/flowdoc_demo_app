@@ -1,0 +1,72 @@
+name: szczypta-smaku
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=test
+      - POSTGRES_DB=szczypta-smaku
+      - LANG=C.UTF-8
+      - LC_ALL=C.UTF-8
+    ports:
+      - "5431:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - szczypta-smaku
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "25044:25044"
+    environment:
+      - DATABASE_URL=postgresql://postgres:test@postgres:5432/postgres?schema=public
+    volumes:
+      - ./backend:/app
+    networks:
+      - szczypta-smaku
+    depends_on:
+      - postgres
+  catering:
+    build:
+      context: ./catering
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_API_PROXY_TARGET=http://backend:25044
+    volumes:
+      - ./catering:/app
+      - /app/node_modules # wlasny node_modules
+    networks:
+      - szczypta-smaku
+    depends_on:
+      - backend
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"   # HTTP - wymagany dla weryfikacji Let's Encrypt
+      - "443:443" # HTTPS
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data      # Przechowuje certyfikaty SSL
+      - caddy_config:/config  # Konfiguracja Caddy
+    networks:
+      - szczypta-smaku
+    depends_on:
+      catering:
+        condition: service_started
+      backend:
+        condition: service_started
+
+volumes:
+  caddy_config:
+  caddy_data:
+  postgres_data:
+networks:
+  szczypta-smaku:
+    driver: bridge

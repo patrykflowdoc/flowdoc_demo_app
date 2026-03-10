@@ -1,0 +1,426 @@
+// Szczypta Smaku — Prisma schema
+// Catering tables from kingofcatering MIGRATION_GUIDE + User for admin auth
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============== Admin auth ==============
+model User {
+  id           String   @id @default(uuid())
+  username     String
+  login        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("users")
+}
+
+// ============== Company ==============
+model CompanySetting {
+  id                   String   @id @default(uuid())
+  companyName          String   @default("")
+  nip                  String   @default("")
+  email                String   @default("")
+  phone                String   @default("")
+  address              String   @default("")
+  bankAccount          String   @default("")
+  logoUrl              String?
+  faviconUrl           String?
+  privacyPolicyUrl     String?
+  minOrderValue        Decimal  @default(200)
+  minLeadDays          Int      @default(3)
+  autoConfirm          Boolean  @default(false)
+  emailNotifications   Boolean  @default(true)
+  smsNotifications     Boolean  @default(false)
+  companyAddressFull   String   @default("")
+  companyLat           Decimal?
+  companyLng           Decimal?
+  deliveryPricePerKm    Decimal  @default(3)
+  maxDeliveryKm        Decimal?
+  freeDeliveryAboveKm  Decimal?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@map("company_settings")
+}
+
+// ============== Event types & categories ==============
+model EventType {
+  id        String   @id @default(uuid())
+  name      String
+  icon      String   @default("CalendarDays")
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  eventCategoryMappings EventCategoryMapping[]
+
+  @@map("event_types")
+}
+
+model ProductCategory {
+  id          String   @id @default(uuid())
+  slug        String
+  name        String
+  description String   @default("")
+  icon        String   @default("Salad")
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  eventCategoryMappings EventCategoryMapping[]
+
+  @@map("product_categories")
+}
+
+model EventCategoryMapping {
+  id          String @id @default(uuid())
+  eventTypeId String
+  categoryId  String
+
+  eventType  EventType        @relation(fields: [eventTypeId], references: [id], onDelete: Cascade)
+  category   ProductCategory  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@map("event_category_mappings")
+}
+
+// ============== Extras categories ==============
+model ExtrasCategory {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String
+  description String   @default("")
+  icon        String   @default("Sparkles")
+  isRequired  Boolean  @default(false)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  extras Extra[]
+
+  @@map("extras_categories")
+}
+
+// ============== Dishes ==============
+model Dish {
+  id                    String   @id @default(uuid())
+  name                  String
+  description           String   @default("")
+  longDescription       String   @default("")
+  imageUrl              String?
+  categorySlug          String?
+  productType           String   @default("dish")
+  priceNetto            Decimal  @default(0)
+  vatRate               Int      @default(8)
+  priceBrutto           Decimal  @default(0)
+  pricePerUnit          Decimal  @default(0)
+  pricePerUnitOnSite    Decimal?
+  unitLabel             String   @default("szt.")
+  minQuantity           Int      @default(1)
+  icon                  String   @default("🍽️")
+  contents              String[] @default([])
+  dietaryTags           String[] @default([])
+  allergens             String[] @default([])
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  dishIngredients       DishIngredient[]
+  bundleVariants        BundleVariant[]
+  configGroupOptions    ConfigGroupOption[]
+
+  @@map("dishes")
+}
+
+// ============== Bundles ==============
+model Bundle {
+  id              String   @id @default(uuid())
+  name            String
+  description     String   @default("")
+  longDescription String   @default("")
+  imageUrl        String?
+  categorySlug    String?
+  priceNetto      Decimal  @default(0)
+  vatRate         Int      @default(8)
+  priceBrutto     Decimal  @default(0)
+  basePrice       Decimal  @default(0)
+  minQuantity     Int      @default(1)
+  icon            String   @default("🍽️")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  bundleVariants BundleVariant[]
+
+  @@map("bundles")
+}
+
+model BundleVariant {
+  id          String  @id @default(uuid())
+  bundleId    String
+  name        String
+  description String  @default("")
+  price       Decimal @default(0)
+  priceOnSite Decimal?
+  dishId      String?
+  dietaryTags String[] @default([])
+  allergens   String[] @default([])
+  sortOrder   Int     @default(0)
+
+  bundle Bundle @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+  dish   Dish?  @relation(fields: [dishId], references: [id])
+
+  @@map("bundle_variants")
+}
+
+// ============== Configurable sets ==============
+model ConfigurableSet {
+  id                    String   @id @default(uuid())
+  name                  String
+  description           String   @default("")
+  longDescription       String   @default("")
+  imageUrl              String?
+  categorySlug          String?
+  pricePerPerson        Decimal  @default(0)
+  pricePerPersonOnSite  Decimal?
+  minPersons            Int      @default(10)
+  icon                  String   @default("🍽️")
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  configGroups ConfigGroup[]
+
+  @@map("configurable_sets")
+}
+
+model ConfigGroup {
+  id            String  @id @default(uuid())
+  setId         String
+  name          String
+  minSelections Int     @default(1)
+  maxSelections Int     @default(3)
+  sortOrder     Int     @default(0)
+
+  set     ConfigurableSet    @relation(fields: [setId], references: [id], onDelete: Cascade)
+  options ConfigGroupOption[]
+
+  @@map("config_groups")
+}
+
+model ConfigGroupOption {
+  id        String  @id @default(uuid())
+  groupId   String
+  name      String
+  dishId    String?
+  allergens String[] @default([])
+  sortOrder Int     @default(0)
+
+  group ConfigGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  dish  Dish?       @relation(fields: [dishId], references: [id])
+
+  @@map("config_group_options")
+}
+
+// ============== Extras ==============
+model Extra {
+  id                  String   @id @default(uuid())
+  category            String   @default("dodatki")
+  extrasCategoryId    String?
+  name                String
+  description         String   @default("")
+  longDescription     String   @default("")
+  imageUrl            String?
+  price               Decimal  @default(0)
+  priceNetto          Decimal?
+  vatRate             Int      @default(23)
+  priceBrutto         Decimal?
+  priceOnSite         Decimal?
+  foodCost            Decimal?
+  unitLabel           String   @default("szt.")
+  priceLabel          String   @default("")
+  icon                String   @default("✨")
+  contents            String[] @default([])
+  duration            String?
+  requiresPersonCount Boolean  @default(false)
+  sortOrder           Int      @default(0)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  extrasCategory ExtrasCategory? @relation(fields: [extrasCategoryId], references: [id])
+
+  @@map("extras")
+}
+
+// ============== Ingredients ==============
+model Ingredient {
+  id           String   @id @default(uuid())
+  name         String
+  unit         String   @default("g")
+  pricePerUnit Decimal @default(0)
+  allergens    String[] @default([])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  dishIngredients DishIngredient[]
+
+  @@map("ingredients")
+}
+
+model DishIngredient {
+  id           String  @id @default(uuid())
+  dishId       String
+  ingredientId String
+  quantity     Decimal @default(0)
+
+  dish       Dish       @relation(fields: [dishId], references: [id], onDelete: Cascade)
+  ingredient Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+
+  @@map("dish_ingredients")
+}
+
+// ============== Delivery ==============
+model DeliveryZone {
+  id                String   @id @default(uuid())
+  name              String
+  description       String   @default("")
+  cities            String[]  @default([])
+  postalCodes       String[]  @default([])
+  price             Decimal  @default(0)
+  freeDeliveryAbove Decimal?
+  minOrderValue     Decimal?
+  isActive          Boolean  @default(true)
+  sortOrder         Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  orders Order[]
+
+  @@map("delivery_zones")
+}
+
+// ============== Clients ==============
+model Client {
+  id                String   @id @default(uuid())
+  firstName         String   @default("")
+  lastName          String   @default("")
+  email             String   @default("")
+  phone             String   @default("")
+  phoneAlt          String?
+  address           String?
+  city              String?
+  postalCode        String?
+  companyName       String?
+  nip               String?
+  companyAddress   String?
+  companyCity       String?
+  companyPostalCode String?
+  notes             String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  orders Order[]
+
+  @@map("clients")
+}
+
+// ============== Orders ==============
+model Order {
+  id               String    @id @default(uuid())
+  orderNumber      String
+  clientId         String?
+  clientName       String    @default("")
+  clientEmail      String?
+  clientPhone      String?
+  eventType        String?
+  eventDate        DateTime? @db.Date
+  guestCount       Int?
+  deliveryAddress  String?
+  contactCity       String?
+  contactStreet    String?
+  contactBuilding  String?
+  contactApartment String?
+  deliveryZoneId    String?
+  deliveryCost     Decimal   @default(0)
+  amount           Decimal   @default(0)
+  status           String    @default("Nowe")
+  paymentMethod    String?
+  notes            String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  client   Client?   @relation(fields: [clientId], references: [id])
+  deliveryZone DeliveryZone? @relation(fields: [deliveryZoneId], references: [id])
+  orderItems          OrderItem[]
+  orderFoodCostExtras OrderFoodCostExtra[]
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id              String   @id @default(uuid())
+  orderId         String
+  name            String
+  quantity        Int      @default(1)
+  unit            String   @default("szt.")
+  pricePerUnit    Decimal  @default(0)
+  total           Decimal  @default(0)
+  itemType        String   @default("simple")
+  foodCostPerUnit Decimal?
+  sortOrder       Int      @default(0)
+
+  order     Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  subItems  OrderItemSubItem[]
+
+  @@map("order_items")
+}
+
+model OrderItemSubItem {
+  id              String  @id @default(uuid())
+  orderItemId     String
+  name            String
+  quantity        Decimal @default(0)
+  unit            String  @default("szt.")
+  foodCostPerUnit Decimal?
+
+  orderItem OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+
+  @@map("order_item_sub_items")
+}
+
+model OrderFoodCostExtra {
+  id      String   @id @default(uuid())
+  orderId String
+  name    String
+  amount  Decimal  @default(0)
+  createdAt DateTime @default(now())
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("order_food_cost_extras")
+}
+
+// ============== Payment & blocked dates ==============
+model PaymentMethod {
+  id          String   @id @default(uuid())
+  name        String
+  description String   @default("")
+  icon        String   @default("💳")
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+
+  @@map("payment_methods")
+}
+
+model BlockedDate {
+  id          String   @id @default(uuid())
+  blockedDate DateTime @db.Date
+  reason      String?
+  createdAt   DateTime @default(now())
+
+  @@map("blocked_dates")
+}
