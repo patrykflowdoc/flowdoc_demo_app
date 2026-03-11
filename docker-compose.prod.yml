@@ -1,0 +1,10 @@
+# Production overrides: no source mounts — use built image content only.
+# Run: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+
+name: szczypta-smaku
+
+services:
+  backend:
+    volumes: []
+  catering:
+    volumes: []

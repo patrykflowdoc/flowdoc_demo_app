@@ -33,7 +33,7 @@ export default defineConfig([
     },
   },
   {
-    files: ['tailwind.config.ts'],
+    files: ['config/tailwind.config.ts'],
     rules: {
       "@typescript-eslint/no-require-imports": "off",
     },
