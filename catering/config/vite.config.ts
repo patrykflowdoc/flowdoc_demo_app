@@ -10,6 +10,9 @@ export default defineConfig({
   plugins: [react()],
   build: {
     sourcemap: false,
+    rollupOptions: {
+      maxParallelFileOps: 2,
+    },
   },
   resolve: {
     alias: { '@': path.resolve(__dirname, '../src') },

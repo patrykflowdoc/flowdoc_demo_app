@@ -8,8 +8,6 @@ COPY package*.json ./
 RUN npm ci
 
 COPY . .
-# Limit Node heap for low-RAM servers (e.g. 1 GB); split build to reduce peak memory (tsc then vite)
-ENV NODE_OPTIONS="--max-old-space-size=512"
 RUN npx tsc -b
 RUN npx vite build --config config/vite.config.ts
 
