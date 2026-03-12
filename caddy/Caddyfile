@@ -2,8 +2,7 @@
     email emil.k@flowdoc.pl
     acme_ca https://acme-v02.api.letsencrypt.org/directory
 }
-159.89.29.29 {
-    tls internal
+http://159.89.29.29 {
     reverse_proxy catering:3000 {
         header_up Connection {>Connection}
         header_up Upgrade {>Upgrade}
