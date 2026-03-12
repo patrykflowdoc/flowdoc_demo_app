@@ -27,6 +27,7 @@ services:
       - DATABASE_URL=postgresql://postgres:test@postgres:5432/szczypta-smaku?schema=public
     volumes:
       - ./backend:/app
+      - /app/node_modules  # zachowaj node_modules z obrazu (zawiera dotenv itd.)
     networks:
       - szczypta-smaku
     depends_on:
