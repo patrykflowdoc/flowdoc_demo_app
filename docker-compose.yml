@@ -2,7 +2,7 @@ name: szczypta-smaku
 
 services:
   postgres:
-    image: szczypta-smaku-postgres
+    image: postgres:17-alpine
     restart: unless-stopped
     environment:
       - POSTGRES_USER=postgres
@@ -48,7 +48,7 @@ services:
     depends_on:
       - backend
   caddy:
-    image: szczypta-smaku-caddy
+    image: caddy:2-alpine
     restart: unless-stopped
     ports:
       - "80:80"   # HTTP - wymagany dla weryfikacji Let's Encrypt
