@@ -1,5 +1,5 @@
-# Production overrides: no source mounts — use built image content only.
-# Run: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+# Production override: no source mounts — use built images only.
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
 name: szczypta-smaku
 

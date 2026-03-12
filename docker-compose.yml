@@ -23,7 +23,7 @@ services:
     ports:
       - "25044:25044"
     environment:
-      - DATABASE_URL=postgresql://postgres:test@postgres:5432/postgres?schema=public
+      - DATABASE_URL=postgresql://postgres:test@postgres:5432/szczypta-smaku?schema=public
     volumes:
       - ./backend:/app
     networks:

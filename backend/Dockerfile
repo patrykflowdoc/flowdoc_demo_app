@@ -1,31 +1,34 @@
-# Backend — production-optimized
-FROM node:24-alpine AS base
-RUN addgroup -g 1001 -S nodejs && adduser -u 1001 -S nodejs -G nodejs
+# Backend — production-optimized, minimal image
+# Prisma: generate in builder (full deps), runner gets only @prisma/client + generated output
+
+FROM node:24-slim AS builder
 WORKDIR /app
+# Prisma needs OpenSSL; slim image doesn't include it
+RUN apt-get update -y && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 
-# Install dependencies (production only)
-FROM base AS deps
-COPY package*.json ./
-RUN npm ci --omit=dev && npm cache clean --force
+# Full install so prisma CLI is available (it's devDependency in lockfile)
+COPY package.json package-lock.json ./
+RUN npm ci
 
-# Generate Prisma client
-FROM base AS prisma
-COPY --from=deps /app/node_modules ./node_modules
-COPY package*.json ./
 COPY prisma ./prisma
 RUN npx prisma generate
 
-# Final image: app only
-FROM base AS runner
+# Runner: production deps only, no prisma CLI
+FROM node:24-slim AS runner
+RUN groupadd --gid 1001 nodejs && useradd --uid 1001 --gid nodejs --create-home nodejs
+WORKDIR /app
 ENV NODE_ENV=production
+
+# Production dependencies (as root), then hand over to nodejs
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev && npm cache clean --force
+
+# Generated Prisma client from builder
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+
+COPY src ./src
+RUN chown -R nodejs:nodejs /app
 USER nodejs
 
-COPY --from=prisma /app/node_modules ./node_modules
-COPY package*.json ./
-COPY prisma ./prisma
-COPY src ./src
-
-# Prisma client already generated in prisma stage
 EXPOSE 25044
-
 CMD ["node", "src/index.js"]
