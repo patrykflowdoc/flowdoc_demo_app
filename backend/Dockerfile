@@ -13,8 +13,9 @@ RUN npm ci
 COPY prisma ./prisma
 RUN npx prisma generate
 
-# Runner: production deps only, no prisma CLI
+# Runner: production deps only, no prisma CLI; OpenSSL for Prisma engine
 FROM node:24-slim AS runner
+RUN apt-get update -y && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 RUN groupadd --gid 1001 nodejs && useradd --uid 1001 --gid nodejs --create-home nodejs
 WORKDIR /app
 ENV NODE_ENV=production
