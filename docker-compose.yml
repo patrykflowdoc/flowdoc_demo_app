@@ -1,6 +1,20 @@
 name: szczypta-smaku
 
 services:
+  seed:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: builder
+    environment:
+      - DATABASE_URL=postgresql://postgres:test@postgres:5432/szczypta-smaku?schema=public
+    command: npx prisma db seed
+    depends_on:
+      - postgres
+    networks:
+      - szczypta-smaku
+    profiles:
+      - tools   # optional: only start with docker compose --profile tools run seed
   postgres:
     image: postgres:17-alpine
     restart: unless-stopped
