@@ -2,6 +2,7 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
+import { isSkipAuth } from "./config/skipAuth.js";
 import authRoutes from "./routes/auth.js";
 import userRoutes from "./routes/users.js";
 import cateringDataRoutes from "./routes/cateringData.js";
@@ -55,6 +56,9 @@ app.use("/api/admin", adminRoutes);
 const port = process.env.PORT || 25044;
 const server = app.listen(port, () => {
   console.log(`Backend is running on port ${port}`);
+  if (isSkipAuth()) {
+    console.warn("SKIP_AUTH is enabled: auth and CSRF are bypassed. Use only in trusted/dev environments.");
+  }
 });
 
 // Keep reference so the process stays alive and log listen errors (e.g. port in use)

@@ -1,17 +1,16 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { prisma } from "../config/db.js";
+import { isSkipAuth, MOCK_USER } from "../config/skipAuth.js";
 import { signToken, verifyToken, AUTH_COOKIE_NAME, CSRF_COOKIE_NAME_EXPORT } from "../lib/jwt.js";
 import { generateCsrfToken } from "../lib/csrf.js";
-import { requireAuth } from "../middleware/auth.js";
 
 const router = Router();
 
-const COOKIE_SECURE = process.env.COOKIE_SECURE === "true";
 
 const COOKIE_OPTIONS = {
   httpOnly: true,
-  secure: COOKIE_SECURE,
+  secure: true,
   sameSite: "lax",
   maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
   path: "/",
@@ -22,6 +21,9 @@ router.post("/login", async (req, res) => {
   const { login, password } = req.body ?? {};
   if (!login || !password) {
     return res.status(400).json({ error: "Login and password required" });
+  }
+  if (isSkipAuth()) {
+    return res.json({ user: { ...MOCK_USER }, csrfToken: "skip-auth" });
   }
   const user = await prisma.user.findUnique({ where: { login: String(login).trim() } });
   if (!user || !bcrypt.compareSync(password, user.passwordHash)) {
@@ -53,6 +55,9 @@ router.post("/logout", (_req, res) => {
 
 /** GET /api/auth/me - current user (requires auth cookie) */
 router.get("/me", (req, res) => {
+  if (isSkipAuth()) {
+    return res.json({ user: { ...MOCK_USER } });
+  }
   const token = req.cookies?.[AUTH_COOKIE_NAME];
   const decoded = verifyToken(token);
   if (!decoded) {
