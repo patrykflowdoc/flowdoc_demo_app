@@ -7,7 +7,7 @@ import { requireAuth } from "../middleware/auth.js";
 
 const router = Router();
 
-const COOKIE_SECURE = process.env.COOKIE_SECURE ?? true;
+const COOKIE_SECURE = process.env.COOKIE_SECURE === "true";
 
 const COOKIE_OPTIONS = {
   httpOnly: true,
