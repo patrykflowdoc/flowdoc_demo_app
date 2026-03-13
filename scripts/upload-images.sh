@@ -37,7 +37,7 @@ SKIP_BUILD="${SKIP_BUILD:-0}"
 RUN_ON_SERVER="${RUN_ON_SERVER:-1}"
 
 if [[ -z "$SERVER" ]]; then
-  echo "Error: SERVER is required (e.g. SERVER=root@159.89.29.29)." >&2
+  echo "Error: SERVER is required." >&2
   exit 1
 fi
 
