@@ -7,9 +7,11 @@ import { requireAuth } from "../middleware/auth.js";
 
 const router = Router();
 
+const COOKIE_SECURE = process.env.COOKIE_SECURE ?? true;
+
 const COOKIE_OPTIONS = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
+  secure: COOKIE_SECURE,
   sameSite: "lax",
   maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
   path: "/",
