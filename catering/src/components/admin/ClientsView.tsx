@@ -12,6 +12,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import ClientDetailView from "./ClientDetailView";
 import { toast } from "@/components/ui/sonner";
 import * as api from "@/api/client";
+import { randomUUID } from "@/lib/utils";
 
 export interface ClientData {
   id: string;
@@ -38,7 +39,7 @@ export interface ClientData {
 type View = "list" | "detail";
 
 const newClientForm = (): ClientData => ({
-  id: crypto.randomUUID(), firstName: "", lastName: "", email: "", phone: "", phoneAlt: "",
+  id: randomUUID(), firstName: "", lastName: "", email: "", phone: "", phoneAlt: "",
   companyName: "", nip: "", companyAddress: "", companyCity: "", companyPostalCode: "",
   address: "", city: "", postalCode: "",
   notes: "", orders: 0, totalSpent: "0,00 zł", lastOrder: "—", createdAt: "",

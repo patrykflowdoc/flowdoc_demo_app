@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Trash2, Pencil, Search, Apple, CookingPot, X, Check, ImagePlus, Package, Settings2, Sparkles, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { cn } from "@/lib/utils";
+import { cn, randomUUID } from "@/lib/utils";
 import * as api from "@/api/client";
 import { toast } from "@/components/ui/sonner";
 
@@ -656,7 +656,7 @@ const BundlesTab = ({ bundles, dishes, categories, reload }: { bundles: Bundle[]
       return;
     }
     const v: BundleVariant = {
-      id: crypto.randomUUID(), name: dish.name, description: dish.description,
+      id: randomUUID(), name: dish.name, description: dish.description,
       price: dish.priceBrutto, priceOnSite: null, allergens: [...dish.allergens],
       dietaryTags: [...dish.dietaryTags], sortOrder: formVariants.length,
       dishId: dish.id,
@@ -905,7 +905,7 @@ const ConfigSetsTab = ({ configSets, dishes, categories, reload }: { configSets:
       return;
     }
     setGroupOptions([...groupOptions, {
-      id: crypto.randomUUID(), name: dish.name,
+      id: randomUUID(), name: dish.name,
       allergens: [...dish.allergens], sortOrder: groupOptions.length,
       dishId: dish.id,
     }]);
@@ -915,7 +915,7 @@ const ConfigSetsTab = ({ configSets, dishes, categories, reload }: { configSets:
   const saveGroup = () => {
     if (!groupName.trim()) return;
     const g: ConfigGroup = {
-      id: editingGroupId || crypto.randomUUID(), name: groupName.trim(),
+      id: editingGroupId || randomUUID(), name: groupName.trim(),
       minSelections: parseInt(groupMin) || 1, maxSelections: parseInt(groupMax) || 3,
       options: groupOptions, sortOrder: formGroups.length,
     };

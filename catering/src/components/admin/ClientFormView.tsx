@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { type ClientData } from "@/components/admin/ClientsView";
+import { randomUUID } from "@/lib/utils";
 
 interface Props {
   client?: ClientData | null; // null = add new
@@ -22,7 +23,7 @@ const emptyClient: ClientData = {
 
 const ClientFormView = ({ client, onBack, onSave }: Props) => {
   const isEditing = !!client;
-  const [form, setForm] = useState<ClientData>(client || { ...emptyClient, id: crypto.randomUUID() });
+  const [form, setForm] = useState<ClientData>(client || { ...emptyClient, id: randomUUID() });
 
   useEffect(() => {
     if (client) {

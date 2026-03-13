@@ -13,7 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { cn } from "@/lib/utils";
+import { cn, randomUUID } from "@/lib/utils";
 import { toast } from "@/components/ui/sonner";
 import { format } from "date-fns";
 import { pl } from "date-fns/locale";
@@ -250,7 +250,7 @@ const OrderDocumentView = ({ order, docType, onBack }: { order: Order; docType: 
   const handleAddExtra = () => {
     const amount = parseFloat(newExtraAmount.replace(",", "."));
     if (!newExtraName.trim() || isNaN(amount)) return;
-    const entry: FoodCostExtra = { id: crypto.randomUUID(), name: newExtraName.trim(), amount, isNew: true };
+    const entry: FoodCostExtra = { id: randomUUID(), name: newExtraName.trim(), amount, isNew: true };
     setFcExtras(prev => [...prev, entry]);
     setNewExtraName("");
     setNewExtraAmount("");
