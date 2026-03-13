@@ -79,14 +79,14 @@ fi
 if [[ "$DEPLOY_IMAGES" == "1" ]]; then
   if [[ "$SKIP_BUILD" != "1" ]]; then
     echo "Building images..."
-    docker compose build backend catering
+    docker compose build --no-cache
   else
     echo "Skipping build (SKIP_BUILD=1)."
   fi
 
   # 4. Export and upload images
   echo "Saving images to $TAR_NAME..."
-  docker save -o "$TAR_NAME" szczypta-smaku-backend szczypta-smaku-catering
+  docker save -o "$TAR_NAME" szczypta-smaku-backend szczypta-smaku-catering caddy:2-alpine
   echo "Uploading to $SERVER:$DEPLOY_PATH/..."
   scp "$TAR_NAME" "$SERVER:$DEPLOY_PATH/"
   UPLOADED_IMAGES_THIS_RUN=1
