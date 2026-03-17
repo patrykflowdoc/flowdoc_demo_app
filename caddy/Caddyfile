@@ -3,7 +3,7 @@
     acme_ca https://acme-v02.api.letsencrypt.org/directory
 }
 
-app.szczypta-smaku.com {
+app.szczyptasmaku.com {
     handle /api/* {
         reverse_proxy backend:25044
     }
