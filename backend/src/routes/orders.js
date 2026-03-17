@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../config/db.js";
+import { sendOrderPlacedAdminEmail, sendOrderPlacedClientEmail } from "../utils/mail.js";
 
 const router = Router();
 
@@ -81,6 +82,38 @@ router.post("/", async (req, res) => {
           sortOrder: idx,
         })),
       });
+    }
+
+    const emailVariables = {
+      orderNumber,
+      status,
+      submissionType,
+      clientName: order.contactName ?? "",
+      clientEmail: order.contactEmail ?? "",
+      clientPhone: order.contactPhone ?? "",
+      deliveryAddress: fullAddress || "",
+      eventDate: order.eventDate ?? null,
+      eventType: order.eventType ?? "",
+      guestCount: order.guestCount ?? null,
+      paymentMethod: order.paymentMethod ?? "",
+      notes: order.notes ?? "",
+      orderItems: orderItems.map((item) => ({
+        name: item.name,
+        quantity: Number(item.quantity) || 1,
+        unit: item.unit ?? "szt.",
+        pricePerUnit: item.pricePerUnit,
+        total: item.total,
+      })),
+      totalPrice,
+    };
+
+    sendOrderPlacedAdminEmail(emailVariables).catch((err) =>
+      console.error("Order admin email failed:", err)
+    );
+    if (order.contactEmail && String(order.contactEmail).trim()) {
+      sendOrderPlacedClientEmail(order.contactEmail.trim(), emailVariables).catch((err) =>
+        console.error("Order client email failed:", err)
+      );
     }
 
     res.status(201).json({ orderId: created.id, orderNumber });

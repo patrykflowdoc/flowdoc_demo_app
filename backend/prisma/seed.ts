@@ -2,10 +2,9 @@
  * Seed: creates first admin user if no users exist.
  * Run with: npm run db:seed  (or npx prisma db seed)
  */
+import "dotenv/config";
 import bcrypt from "bcryptjs";
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import { prisma } from "../src/config/db.js";
 
 async function main() {
   const count = await prisma.user.count();

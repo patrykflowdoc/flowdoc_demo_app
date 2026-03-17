@@ -3,12 +3,65 @@
  * Mount at /api/admin
  */
 import { Router } from "express";
+import { z } from "zod";
 import { prisma } from "../config/db.js";
 import { requireAuth } from "../middleware/auth.js";
 import { requireCsrf } from "../middleware/csrf.js";
 
 const router = Router();
 router.use(requireAuth);
+
+/** PATCH body: only provided fields; numeric fields coerced from string. */
+const bundlePatchSchema = z
+  .object({
+    name: z.string().optional(),
+    description: z.string().optional(),
+    longDescription: z.string().optional(),
+    imageUrl: z.union([z.string(), z.null()]).optional(),
+    categorySlug: z.union([z.string(), z.null()]).optional(),
+    priceNetto: z.coerce.number().optional(),
+    vatRate: z.coerce.number().optional(),
+    priceBrutto: z.coerce.number().optional(),
+    basePrice: z.coerce.number().optional(),
+    minQuantity: z.coerce.number().optional(),
+    icon: z.string().optional(),
+  })
+  .partial();
+
+/** PATCH body: only provided fields; numeric fields coerced from string. */
+const configurableSetPatchSchema = z
+  .object({
+    name: z.string().optional(),
+    description: z.string().optional(),
+    longDescription: z.string().optional(),
+    imageUrl: z.union([z.string(), z.null()]).optional(),
+    categorySlug: z.union([z.string(), z.null()]).optional(),
+    pricePerPerson: z.coerce.number().optional(),
+    pricePerPersonOnSite: z.union([z.coerce.number(), z.null()]).optional(),
+    minPersons: z.coerce.number().optional(),
+    icon: z.string().optional(),
+  })
+  .partial();
+
+function pickWithSnakeFallback(obj, keys) {
+  const out = {};
+  for (const key of keys) {
+    const snake = key.replace(/([A-Z])/g, "_$1").toLowerCase();
+    const v = obj[key] ?? obj[snake];
+    if (v !== undefined) out[key] = v;
+  }
+  return out;
+}
+
+const BUNDLE_PATCH_KEYS = [
+  "name", "description", "longDescription", "imageUrl", "categorySlug",
+  "priceNetto", "vatRate", "priceBrutto", "basePrice", "minQuantity", "icon",
+];
+
+const CONFIGURABLE_SET_PATCH_KEYS = [
+  "name", "description", "longDescription", "imageUrl", "categorySlug",
+  "pricePerPerson", "pricePerPersonOnSite", "minPersons", "icon",
+];
 
 function toNum(v) {
   if (v == null) return null;
@@ -838,12 +891,12 @@ router.post("/bundles", requireCsrf, async (req, res) => {
 router.patch("/bundles/:id", requireCsrf, async (req, res) => {
   const id = req.params.id;
   const b = req.body ?? {};
-  const data = {};
-  ["name", "description", "longDescription", "imageUrl", "categorySlug", "priceNetto", "vatRate", "priceBrutto", "basePrice", "minQuantity", "icon"].forEach((key) => {
-    const v = b[key] ?? b[key.replace(/([A-Z])/g, "_$1").toLowerCase()];
-    if (v === undefined) return;
-    data[key] = typeof v === "number" ? v : v;
-  });
+  const bodyForBundle = pickWithSnakeFallback(b, BUNDLE_PATCH_KEYS);
+  const parsed = bundlePatchSchema.safeParse(bodyForBundle);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Validation failed", details: parsed.error.flatten() });
+  }
+  const data = Object.fromEntries(Object.entries(parsed.data).filter(([, v]) => v !== undefined));
   if (Object.keys(data).length > 0) await prisma.bundle.update({ where: { id }, data });
   if (Array.isArray(b.bundle_variants)) {
     await prisma.bundleVariant.deleteMany({ where: { bundleId: id } });
@@ -940,12 +993,12 @@ router.post("/configurable-sets", requireCsrf, async (req, res) => {
 router.patch("/configurable-sets/:id", requireCsrf, async (req, res) => {
   const id = req.params.id;
   const b = req.body ?? {};
-  const data = {};
-  ["name", "description", "longDescription", "imageUrl", "categorySlug", "pricePerPerson", "pricePerPersonOnSite", "minPersons", "icon"].forEach((key) => {
-    const v = b[key] ?? b[key.replace(/([A-Z])/g, "_$1").toLowerCase()];
-    if (v === undefined) return;
-    data[key] = typeof v === "number" ? v : v;
-  });
+  const bodyForSet = pickWithSnakeFallback(b, CONFIGURABLE_SET_PATCH_KEYS);
+  const parsed = configurableSetPatchSchema.safeParse(bodyForSet);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Validation failed", details: parsed.error.flatten() });
+  }
+  const data = Object.fromEntries(Object.entries(parsed.data).filter(([, v]) => v !== undefined));
   if (Object.keys(data).length > 0) await prisma.configurableSet.update({ where: { id }, data });
   if (Array.isArray(b.config_groups)) {
     const existing = await prisma.configGroup.findMany({ where: { setId: id }, select: { id: true } });
