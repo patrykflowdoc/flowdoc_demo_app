@@ -126,6 +126,7 @@ export async function getExtras(): Promise<{
   extraItems: unknown[];
   packagingOptions: unknown[];
   waiterServiceOptions: unknown[];
+  extraBundles: unknown[];
 }> {
   return request("/api/extras");
 }
