@@ -19,6 +19,9 @@ const ALLERGEN_OPTIONS = [
 const DIETARY_OPTIONS = ["Wegetariańskie", "Wegańskie", "Bezglutenowe", "Bez laktozy", "Keto"];
 const VAT_RATES = [0, 5, 8, 23];
 
+const toNullableNumber = (val: unknown): number | null =>
+  val != null ? Number(val) : null;
+
 // ===== TYPES =====
 type UnitType = "g" | "ml" | "szt.";
 
@@ -1514,7 +1517,7 @@ const SettingsDishesView = () => {
         vatRate: Number(d.vatRate ?? d.vat_rate ?? 8),
         priceBrutto: Number(d.priceBrutto ?? d.price_brutto ?? 0),
         pricePerUnit: Number(d.pricePerUnit ?? d.price_per_unit ?? d.priceBrutto ?? d.price_brutto ?? 0),
-        pricePerUnitOnSite: d.pricePerUnitOnSite ?? d.price_per_unit_on_site != null ? Number(d.pricePerUnitOnSite ?? d.price_per_unit_on_site) : null,
+        pricePerUnitOnSite: toNullableNumber(d.pricePerUnitOnSite ?? d.price_per_unit_on_site),
         unitLabel: String(d.unitLabel ?? d.unit_label ?? "szt."),
         minQuantity: Number(d.minQuantity ?? d.min_quantity ?? 1),
         icon: String(d.icon ?? "🍽️"),
@@ -1548,7 +1551,7 @@ const SettingsDishesView = () => {
             name: String(v.name ?? ""),
             description: String(v.description ?? ""),
             price: Number(v.price ?? 0),
-            priceOnSite: v.priceOnSite ?? v.price_on_site != null ? Number(v.priceOnSite ?? v.price_on_site) : null,
+            priceOnSite: toNullableNumber(v.priceOnSite ?? v.price_on_site),
             allergens: (v.allergens as string[]) ?? [],
             dietaryTags: (v.dietaryTags as string[]) ?? (v.dietary_tags as string[]) ?? [],
             sortOrder: Number(v.sortOrder ?? v.sort_order ?? 0),
@@ -1568,7 +1571,7 @@ const SettingsDishesView = () => {
           longDescription: String(s.longDescription ?? s.long_description ?? ""),
           image: (s.imageUrl ?? s.image_url ?? null) as string | null,
           pricePerPerson: Number(s.pricePerPerson ?? s.price_per_person ?? 0),
-          pricePerPersonOnSite: s.pricePerPersonOnSite ?? s.price_per_person_on_site != null ? Number(s.pricePerPersonOnSite ?? s.price_per_person_on_site) : null,
+          pricePerPersonOnSite: toNullableNumber(s.pricePerPersonOnSite ?? s.price_per_person_on_site),
           minPersons: Number(s.minPersons ?? s.min_persons ?? 10),
           icon: String(s.icon ?? "🍽️"),
           categorySlug: (s.categorySlug ?? s.category_slug ?? null) as string | null,
@@ -1606,7 +1609,7 @@ const SettingsDishesView = () => {
         priceNetto: Number(e.priceNetto ?? e.price_netto ?? 0),
         vatRate: Number(e.vatRate ?? e.vat_rate ?? 23),
         priceBrutto: Number(e.priceBrutto ?? e.price_brutto ?? e.price ?? 0),
-        priceOnSite: e.priceOnSite ?? e.price_on_site != null ? Number(e.priceOnSite ?? e.price_on_site) : null,
+        priceOnSite: toNullableNumber(e.priceOnSite ?? e.price_on_site),
         unitLabel: String(e.unitLabel ?? e.unit_label ?? "szt."),
         priceLabel: String(e.priceLabel ?? e.price_label ?? ""),
         requiresPersonCount: Boolean(e.requiresPersonCount ?? e.requires_person_count ?? false),
@@ -1638,7 +1641,7 @@ const SettingsDishesView = () => {
             name: String(v.name ?? ""),
             description: String(v.description ?? ""),
             price: Number(v.price ?? 0),
-            priceOnSite: v.priceOnSite ?? v.price_on_site != null ? Number(v.priceOnSite ?? v.price_on_site) : null,
+            priceOnSite: toNullableNumber(v.priceOnSite ?? v.price_on_site),
             contents: (v.contents as string[]) ?? [],
             sortOrder: Number(v.sortOrder ?? v.sort_order ?? 0),
             extraId: (v.extraId ?? v.extra_id ?? null) as string | null,
