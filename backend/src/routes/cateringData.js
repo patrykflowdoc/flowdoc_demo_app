@@ -71,6 +71,7 @@ router.get("/products", async (_req, res) => {
       image: d.imageUrl ?? undefined,
       contents: d.contents ?? [],
       allergens: d.allergens ?? [],
+      dietaryTags: d.dietaryTags ?? [],
       pricePerUnit: toNum(d.pricePerUnit) ?? toNum(d.priceBrutto) ?? 0,
       pricePerUnitOnSite: toNum(d.pricePerUnitOnSite),
       unitLabel: d.unitLabel ?? "szt.",
@@ -99,6 +100,7 @@ router.get("/products", async (_req, res) => {
       basePrice: toNum(b.basePrice) ?? 0,
       minQuantity: b.minQuantity ?? 1,
       category: b.categorySlug ?? "mini",
+      dietaryTags: b.dietaryTags ?? [],
       variants,
     });
   }
@@ -113,6 +115,7 @@ router.get("/products", async (_req, res) => {
         id: o.id,
         name: o.name,
         allergens: o.allergens ?? [],
+        dietaryTags: o.dietaryTags ?? [],
       })),
     }));
     products.push({
@@ -126,6 +129,7 @@ router.get("/products", async (_req, res) => {
       pricePerPersonOnSite: toNum(s.pricePerPersonOnSite),
       minPersons: s.minPersons ?? 10,
       category: s.categorySlug ?? "zestawy",
+      dietaryTags: s.dietaryTags ?? [],
       optionGroups,
     });
   }

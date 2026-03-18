@@ -324,6 +324,18 @@ function ExpandableProductContent({
                     <span className="text-xs text-orange-600">{variant.allergens.join(", ")}</span>
                   </div>
                 )}
+                {variant.dietaryTags && variant.dietaryTags.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {variant.dietaryTags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="px-2 py-0.5 rounded-full text-[10px] font-medium border bg-accent text-accent-foreground border-accent"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
               <QuantityInput value={qty} onChange={(newQty) => onVariantQuantityChange(variant.id, newQty)} size="sm" />
             </div>
@@ -397,6 +409,18 @@ function ConfigurableProductContent({
           {product.longDescription && (
             <p className="text-sm text-muted-foreground mt-2">{product.longDescription}</p>
           )}
+          {product.dietaryTags && product.dietaryTags.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {product.dietaryTags.map((tag) => (
+                <span
+                  key={tag}
+                  className="px-2 py-0.5 rounded-full text-[10px] font-medium border bg-accent text-accent-foreground border-accent"
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="p-4 bg-accent rounded-xl">
@@ -446,13 +470,13 @@ function ConfigurableProductContent({
                 <h3 className="font-semibold">{group.name}</h3>
                 <span className="text-xs text-muted-foreground uppercase">
                   Wybierz {selected.length} z {group.maxSelections}
+
                 </span>
               </div>
               
               <div className="space-y-2">
                 {group.options.map((option) => {
                   const isChecked = selected.includes(option.id);
-                  
                   return (
                     <div
                       key={option.id}
@@ -471,6 +495,18 @@ function ConfigurableProductContent({
                           <div className="flex items-center gap-1 mt-1">
                             <AlertTriangle className="w-3 h-3 text-orange-500" />
                             <span className="text-xs text-orange-600">{option.allergens.join(", ")}</span>
+                          </div>
+                        )}
+                        {option.dietaryTags && option.dietaryTags.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {option.dietaryTags.map((tag) => (
+                              <span
+                                key={tag}
+                                className="px-2 py-0.5 rounded-full text-[10px] font-medium border bg-accent text-accent-foreground border-accent"
+                              >
+                                {tag}
+                              </span>
+                            ))}
                           </div>
                         )}
                       </div>

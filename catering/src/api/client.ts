@@ -3,6 +3,10 @@
  * For mutations (POST/PUT/PATCH/DELETE), send X-CSRF-Token header if available.
  */
 
+import { z } from "zod";
+import { ProductSchema } from "@/lib/schemas/product";
+import type { Product } from "@/data/products";
+
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
 function getCsrfToken(): string | null {
@@ -109,8 +113,9 @@ export async function getEventCategoryMappings(): Promise<{ event_type_id: strin
   return request("/api/event-category-mappings");
 }
 
-export async function getProducts(): Promise<unknown[]> {
-  return request("/api/products");
+export async function getProducts(): Promise<Product[]> {
+  const data = await request<unknown[]>("/api/products");
+  return z.array(ProductSchema).parse(data);
 }
 
 export async function getExtrasCategories(): Promise<unknown[]> {

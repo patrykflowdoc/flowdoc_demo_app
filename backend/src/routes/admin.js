@@ -25,6 +25,7 @@ const bundlePatchSchema = z
     basePrice: z.coerce.number().optional(),
     minQuantity: z.coerce.number().optional(),
     icon: z.string().optional(),
+    dietaryTags: z.array(z.string()).optional(),
   })
   .partial();
 
@@ -40,6 +41,7 @@ const configurableSetPatchSchema = z
     pricePerPersonOnSite: z.union([z.coerce.number(), z.null()]).optional(),
     minPersons: z.coerce.number().optional(),
     icon: z.string().optional(),
+    dietaryTags: z.array(z.string()).optional(),
   })
   .partial();
 
@@ -55,12 +57,12 @@ function pickWithSnakeFallback(obj, keys) {
 
 const BUNDLE_PATCH_KEYS = [
   "name", "description", "longDescription", "imageUrl", "categorySlug",
-  "priceNetto", "vatRate", "priceBrutto", "basePrice", "minQuantity", "icon",
+  "priceNetto", "vatRate", "priceBrutto", "basePrice", "minQuantity", "icon", "dietaryTags",
 ];
 
 const CONFIGURABLE_SET_PATCH_KEYS = [
   "name", "description", "longDescription", "imageUrl", "categorySlug",
-  "pricePerPerson", "pricePerPersonOnSite", "minPersons", "icon",
+  "pricePerPerson", "pricePerPersonOnSite", "minPersons", "icon", "dietaryTags",
 ];
 
 function toNum(v) {
@@ -969,6 +971,7 @@ router.post("/bundles", requireCsrf, async (req, res) => {
     basePrice: Number(b.basePrice ?? b.base_price ?? 0),
     minQuantity: Number(b.minQuantity ?? 1),
     icon: b.icon ?? "🍽️",
+    dietaryTags: Array.isArray(b.dietary_tags ?? b.dietaryTags) ? (b.dietary_tags ?? b.dietaryTags) : [],
   };
   const created = await prisma.bundle.create({
     data: bundlePayload,
@@ -1060,6 +1063,7 @@ router.post("/configurable-sets", requireCsrf, async (req, res) => {
     pricePerPersonOnSite: b.pricePerPersonOnSite != null ? Number(b.pricePerPersonOnSite) : null,
     minPersons: Number(b.minPersons ?? b.min_persons ?? 10),
     icon: b.icon ?? "🍽️",
+    dietaryTags: Array.isArray(b.dietary_tags ?? b.dietaryTags) ? (b.dietary_tags ?? b.dietaryTags) : [],
   };
   const created = await prisma.configurableSet.create({ data: setPayload });
   if (Array.isArray(b.config_groups) && b.config_groups.length > 0) {
@@ -1080,6 +1084,7 @@ router.post("/configurable-sets", requireCsrf, async (req, res) => {
             name: o.name ?? "",
             dishId: o.dish_id ?? o.dishId ?? null,
             allergens: Array.isArray(o.allergens) ? o.allergens : [],
+            dietaryTags: Array.isArray(o.dietary_tags ?? o.dietaryTags) ? (o.dietary_tags ?? o.dietaryTags) : [],
             sortOrder: o.sort_order ?? o.sortOrder ?? i,
           })),
         });
@@ -1131,6 +1136,7 @@ router.patch("/configurable-sets/:id", requireCsrf, async (req, res) => {
             name: o.name ?? "",
             dishId: o.dish_id ?? o.dishId ?? null,
             allergens: Array.isArray(o.allergens) ? o.allergens : [],
+            dietaryTags: Array.isArray(o.dietary_tags ?? o.dietaryTags) ? (o.dietary_tags ?? o.dietaryTags) : [],
             sortOrder: o.sort_order ?? o.sortOrder ?? i,
           })),
         });

@@ -10,6 +10,7 @@ export type SimpleProduct = {
   image?: string;
   contents: string[];
   allergens: string[];
+  dietaryTags: string[];
   pricePerUnit: number;
   pricePerUnitOnSite?: number | null;
   unitLabel: string;
@@ -28,6 +29,7 @@ export type ExpandableProduct = {
   basePrice: number;
   minQuantity: number;
   category: string;
+  dietaryTags: string[];
   variants: ProductVariant[];
 };
 
@@ -54,6 +56,7 @@ export type ConfigurableProduct = {
   minPersons: number;
   category: string;
   optionGroups: OptionGroup[];
+  dietaryTags: string[];
 };
 
 export type OptionGroup = {
@@ -68,6 +71,7 @@ export type GroupOption = {
   id: string;
   name: string;
   allergens: string[];
+  dietaryTags: string[];
 };
 
 export type Product = SimpleProduct | ExpandableProduct | ConfigurableProduct;
@@ -136,6 +140,7 @@ export const products: Product[] = [
       "Miód akacjowy 50ml",
     ],
     allergens: ["mleko", "orzechy"],
+    dietaryTags: [],
     pricePerUnit: 450,
     unitLabel: "szt.",
     minQuantity: 1,
@@ -157,6 +162,7 @@ export const products: Product[] = [
       "Grissini 12 szt.",
     ],
     allergens: ["gluten"],
+    dietaryTags: [],
     pricePerUnit: 520,
     unitLabel: "szt.",
     minQuantity: 1,
@@ -178,6 +184,7 @@ export const products: Product[] = [
       "Cytryna i koperek",
     ],
     allergens: ["ryby", "skorupiaki"],
+    dietaryTags: [],
     pricePerUnit: 680,
     unitLabel: "szt.",
     minQuantity: 1,
@@ -199,6 +206,7 @@ export const products: Product[] = [
       "Focaccia z rozmarynem",
     ],
     allergens: ["mleko", "gluten"],
+    dietaryTags: [],
     pricePerUnit: 380,
     unitLabel: "szt.",
     minQuantity: 1,
@@ -216,6 +224,7 @@ export const products: Product[] = [
     basePrice: 18,
     minQuantity: 8,
     category: "mini",
+    dietaryTags: [],
     variants: [
       {
         id: "tacos-kurczak",
@@ -261,6 +270,7 @@ export const products: Product[] = [
     basePrice: 15,
     minQuantity: 10,
     category: "mini",
+    dietaryTags: [],
     variants: [
       {
         id: "burger-klasyczny",
@@ -298,6 +308,7 @@ export const products: Product[] = [
     basePrice: 8,
     minQuantity: 16,
     category: "mini",
+    dietaryTags: [],
     variants: [
       {
         id: "sushi-sake",
@@ -352,12 +363,12 @@ export const products: Product[] = [
         minSelections: 2,
         maxSelections: 6,
         options: [
-          { id: "roladki-indyk", name: "Roladki z indyka ze szpinakiem suszonymi pomidorami i mozarellą", allergens: ["mleko"] },
-          { id: "schabowy", name: "Staropolski schabowy", allergens: ["gluten", "jaja"] },
-          { id: "pulpeciki", name: "Pulpeciki wołowo-wieprzowe w sosie grzybowym", allergens: ["gluten"] },
-          { id: "karkowka", name: "Karkówka w sosie własnym", allergens: [] },
-          { id: "kurczak-panko", name: "Filet z kurczaka w panko", allergens: ["gluten"] },
-          { id: "dorsz", name: "Dorsz w sosie cytrusowym", allergens: ["ryby"] },
+          { id: "roladki-indyk", name: "Roladki z indyka ze szpinakiem suszonymi pomidorami i mozarellą", allergens: ["mleko"], dietaryTags: [] },
+          { id: "schabowy", name: "Staropolski schabowy", allergens: ["gluten", "jaja"], dietaryTags: [] },
+          { id: "pulpeciki", name: "Pulpeciki wołowo-wieprzowe w sosie grzybowym", allergens: ["gluten"], dietaryTags: [] },
+          { id: "karkowka", name: "Karkówka w sosie własnym", allergens: [], dietaryTags: [] },
+          { id: "kurczak-panko", name: "Filet z kurczaka w panko", allergens: ["gluten"], dietaryTags: [] },
+          { id: "dorsz", name: "Dorsz w sosie cytrusowym", allergens: ["ryby"], dietaryTags: [] },
         ],
       },
       {
@@ -366,10 +377,10 @@ export const products: Product[] = [
         minSelections: 2,
         maxSelections: 4,
         options: [
-          { id: "ziemniaki", name: "Ziemniaki opiekane z rozmarynem", allergens: [] },
-          { id: "ryz", name: "Ryż z warzywami", allergens: [] },
-          { id: "kasza", name: "Kasza gryczana", allergens: [] },
-          { id: "puree", name: "Puree ziemniaczane", allergens: ["mleko"] },
+          { id: "ziemniaki", name: "Ziemniaki opiekane z rozmarynem", allergens: [], dietaryTags: [] },
+          { id: "ryz", name: "Ryż z warzywami", allergens: [], dietaryTags: [] },
+          { id: "kasza", name: "Kasza gryczana", allergens: [], dietaryTags: [] },
+          { id: "puree", name: "Puree ziemniaczane", allergens: ["mleko"], dietaryTags: [] },
         ],
       },
       {
@@ -378,13 +389,14 @@ export const products: Product[] = [
         minSelections: 1,
         maxSelections: 3,
         options: [
-          { id: "mizeria", name: "Mizeria", allergens: ["mleko"] },
-          { id: "surowka-marchew", name: "Surówka z marchewki", allergens: [] },
-          { id: "salatka-grecka", name: "Sałatka grecka", allergens: ["mleko"] },
-          { id: "coleslaw", name: "Colesław", allergens: ["jaja"] },
+          { id: "mizeria", name: "Mizeria", allergens: ["mleko"], dietaryTags: [] },
+          { id: "surowka-marchew", name: "Surówka z marchewki", allergens: [], dietaryTags: [] },
+          { id: "salatka-grecka", name: "Sałatka grecka", allergens: ["mleko"], dietaryTags: [] },
+          { id: "coleslaw", name: "Colesław", allergens: ["jaja"], dietaryTags: [] },
         ],
       },
     ],
+    dietaryTags: [],
   },
   {
     type: "configurable",
@@ -403,10 +415,10 @@ export const products: Product[] = [
         minSelections: 2,
         maxSelections: 4,
         options: [
-          { id: "poledwica", name: "Polędwica wołowa z sosem z zielonym pieprzem", allergens: ["mleko"] },
-          { id: "kaczka", name: "Kaczka konfitowana z jabłkami", allergens: [] },
-          { id: "losos-grillowany", name: "Łosoś grillowany z masłem czosnkowym", allergens: ["ryby", "mleko"] },
-          { id: "risotto-truflowe", name: "Risotto z truflami (vege)", allergens: ["mleko"] },
+          { id: "poledwica", name: "Polędwica wołowa z sosem z zielonym pieprzem", allergens: ["mleko"], dietaryTags: [] },
+          { id: "kaczka", name: "Kaczka konfitowana z jabłkami", allergens: [], dietaryTags: [] },
+          { id: "losos-grillowany", name: "Łosoś grillowany z masłem czosnkowym", allergens: ["ryby", "mleko"], dietaryTags: [] },
+          { id: "risotto-truflowe", name: "Risotto z truflami (vege)", allergens: ["mleko"], dietaryTags: [] },
         ],
       },
       {
@@ -415,9 +427,9 @@ export const products: Product[] = [
         minSelections: 2,
         maxSelections: 3,
         options: [
-          { id: "carpaccio", name: "Carpaccio z polędwicy", allergens: ["mleko"] },
-          { id: "tatar-losos", name: "Tatar z łososia z awokado", allergens: ["ryby"] },
-          { id: "bruschetta", name: "Bruschetta z pomidorami", allergens: ["gluten"] },
+          { id: "carpaccio", name: "Carpaccio z polędwicy", allergens: ["mleko"], dietaryTags: [] },
+          { id: "tatar-losos", name: "Tatar z łososia z awokado", allergens: ["ryby"], dietaryTags: [] },
+          { id: "bruschetta", name: "Bruschetta z pomidorami", allergens: ["gluten"], dietaryTags: [] },
         ],
       },
       {
@@ -426,12 +438,13 @@ export const products: Product[] = [
         minSelections: 1,
         maxSelections: 2,
         options: [
-          { id: "creme-brulee", name: "Crème brûlée", allergens: ["mleko", "jaja"] },
-          { id: "fondant", name: "Fondant czekoladowy", allergens: ["mleko", "jaja", "gluten"] },
-          { id: "panna-cotta", name: "Panna cotta z malinami", allergens: ["mleko"] },
+          { id: "creme-brulee", name: "Crème brûlée", allergens: ["mleko", "jaja"], dietaryTags: [] },
+          { id: "fondant", name: "Fondant czekoladowy", allergens: ["mleko", "jaja", "gluten"], dietaryTags: [] },
+          { id: "panna-cotta", name: "Panna cotta z malinami", allergens: ["mleko"], dietaryTags: [] },
         ],
       },
     ],
+    dietaryTags: [],
   },
   {
     type: "configurable",
@@ -450,10 +463,10 @@ export const products: Product[] = [
         minSelections: 2,
         maxSelections: 4,
         options: [
-          { id: "curry-vege", name: "Curry warzywne z mlekiem kokosowym", allergens: [] },
-          { id: "lasagne-vege", name: "Lasagne z warzywami", allergens: ["mleko", "gluten"] },
-          { id: "falafel-talerz", name: "Talerz falafel z hummusem", allergens: ["sezam"] },
-          { id: "stir-fry", name: "Stir-fry z tofu", allergens: ["soja", "gluten"] },
+          { id: "curry-vege", name: "Curry warzywne z mlekiem kokosowym", allergens: [], dietaryTags: [] },
+          { id: "lasagne-vege", name: "Lasagne z warzywami", allergens: ["mleko", "gluten"], dietaryTags: [] },
+          { id: "falafel-talerz", name: "Talerz falafel z hummusem", allergens: ["sezam"], dietaryTags: [] },
+          { id: "stir-fry", name: "Stir-fry z tofu", allergens: ["soja", "gluten"], dietaryTags: [] },
         ],
       },
       {
@@ -462,9 +475,9 @@ export const products: Product[] = [
         minSelections: 2,
         maxSelections: 3,
         options: [
-          { id: "ryz-jaśminowy", name: "Ryż jaśminowy", allergens: [] },
-          { id: "kuskus", name: "Kuskus z warzywami", allergens: ["gluten"] },
-          { id: "grillowane-warzywa", name: "Grillowane warzywa", allergens: [] },
+          { id: "ryz-jaśminowy", name: "Ryż jaśminowy", allergens: [], dietaryTags: [] },
+          { id: "kuskus", name: "Kuskus z warzywami", allergens: ["gluten"], dietaryTags: [] },
+          { id: "grillowane-warzywa", name: "Grillowane warzywa", allergens: [], dietaryTags: [] },
         ],
       },
       {
@@ -473,12 +486,13 @@ export const products: Product[] = [
         minSelections: 1,
         maxSelections: 2,
         options: [
-          { id: "quinoa-bowl", name: "Quinoa bowl", allergens: [] },
-          { id: "tabouleh", name: "Tabouleh", allergens: ["gluten"] },
-          { id: "caprese", name: "Caprese", allergens: ["mleko"] },
+          { id: "quinoa-bowl", name: "Quinoa bowl", allergens: [], dietaryTags: [] },
+          { id: "tabouleh", name: "Tabouleh", allergens: ["gluten"], dietaryTags: [] },
+          { id: "caprese", name: "Caprese", allergens: ["mleko"], dietaryTags: [] },
         ],
       },
     ],
+    dietaryTags: ["Wegetariańskie"],
   },
 ];
 

@@ -153,6 +153,7 @@ model Bundle {
   basePrice       Decimal  @default(0)
   minQuantity     Int      @default(1)
   icon            String   @default("🍽️")
+  dietaryTags     String[] @default([])
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -191,6 +192,7 @@ model ConfigurableSet {
   pricePerPersonOnSite  Decimal?
   minPersons            Int      @default(10)
   icon                  String   @default("🍽️")
+  dietaryTags           String[] @default([])
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
@@ -214,12 +216,13 @@ model ConfigGroup {
 }
 
 model ConfigGroupOption {
-  id        String  @id @default(uuid())
-  groupId   String
-  name      String
-  dishId    String?
-  allergens String[] @default([])
-  sortOrder Int     @default(0)
+  id          String   @id @default(uuid())
+  groupId     String
+  name        String
+  dishId      String?
+  allergens   String[] @default([])
+  dietaryTags String[] @default([])
+  sortOrder   Int      @default(0)
 
   group ConfigGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
   dish  Dish?       @relation(fields: [dishId], references: [id])
