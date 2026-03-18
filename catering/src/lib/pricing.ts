@@ -1,5 +1,5 @@
 import type { Product, SimpleProduct, ConfigurableProduct, ProductVariant } from "@/data/products";
-import type { ExtraItem, PackagingOption, WaiterServiceOption } from "@/data/extras";
+import type { ExtraItem, PackagingOption, WaiterServiceOption, ExtraVariant } from "@/data/extras";
 
 export type CateringType = "wyjazdowy" | "na_sali";
 
@@ -49,6 +49,14 @@ export function getWaiterPrice(service: WaiterServiceOption, cateringType: Cater
     return service.priceOnSite;
   }
   return service.price;
+}
+
+/** Get effective price for an extra bundle variant */
+export function getExtraBundleVariantPrice(variant: ExtraVariant, cateringType: CateringType): number {
+  if (cateringType === "na_sali" && variant.priceOnSite != null) {
+    return variant.priceOnSite;
+  }
+  return variant.price;
 }
 
 /** Get effective price for any product type */

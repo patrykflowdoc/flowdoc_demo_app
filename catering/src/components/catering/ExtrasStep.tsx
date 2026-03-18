@@ -15,43 +15,51 @@ import type {
   PackagingOption,
   WaiterServiceOption,
   ExtrasCategory,
+  ExpandableExtra,
 } from "@/data/extras";
 
 type ExtrasStepProps = {
   extrasCategories: ExtrasCategory[];
   selectedExtras: Record<string, number>;
+  selectedExpandableExtras: Record<string, Record<string, number>>;
   selectedPackaging: string | null;
   packagingPersonCount: number;
   selectedWaiterService: string | null;
   waiterCount: number;
   onExtraChange: (extraId: string, quantity: number) => void;
+  onExpandableExtraChange: (bundleId: string, variantId: string, quantity: number) => void;
   onPackagingChange: (packagingId: string | null, personCount: number) => void;
   onWaiterServiceChange: (serviceId: string | null, count: number) => void;
   guestCount: number;
   extraItems: ExtraItem[];
   packagingOptions: PackagingOption[];
   waiterServiceOptions: WaiterServiceOption[];
+  extraBundles: ExpandableExtra[];
 };
 
 export function ExtrasStep({
   extrasCategories,
   selectedExtras,
+  selectedExpandableExtras,
   selectedPackaging,
   packagingPersonCount,
   selectedWaiterService,
   waiterCount,
   onExtraChange,
+  onExpandableExtraChange,
   onPackagingChange,
   onWaiterServiceChange,
   guestCount,
   extraItems,
   packagingOptions,
   waiterServiceOptions,
+  extraBundles,
 }: ExtrasStepProps) {
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [selectedExtraItem, setSelectedExtraItem] = useState<ExtraItem | null>(null);
   const [selectedPackagingOption, setSelectedPackagingOption] = useState<PackagingOption | null>(null);
   const [selectedWaiterOption, setSelectedWaiterOption] = useState<WaiterServiceOption | null>(null);
+  const [selectedExtraBundle, setSelectedExtraBundle] = useState<ExpandableExtra | null>(null);
 
   // Set first category as active when categories load
   const effectiveActiveCategory = activeCategory ?? (extrasCategories?.length > 0 ? extrasCategories[0].id : null);
@@ -93,6 +101,18 @@ export function ExtrasStep({
     return map;
   }, [waiterServiceOptions]);
 
+  const bundlesByCategory = useMemo(() => {
+    const map: Record<string, ExpandableExtra[]> = {};
+    for (const bundle of extraBundles) {
+      const catId = bundle.extrasCategoryId;
+      if (catId) {
+        if (!map[catId]) map[catId] = [];
+        map[catId].push(bundle);
+      }
+    }
+    return map;
+  }, [extraBundles]);
+
   const getTotalItemsInCategory = (categoryId: string) => {
     let count = 0;
     const extras = extrasByCategory[categoryId] || [];
@@ -101,6 +121,12 @@ export function ExtrasStep({
     count += pkgs.filter(p => selectedPackaging === p.id).length;
     const waiters = waiterByCategory[categoryId] || [];
     count += waiters.filter(w => selectedWaiterService === w.id).length;
+    const bundles = bundlesByCategory[categoryId] || [];
+    bundles.forEach(b => {
+      const bundleSelections = selectedExpandableExtras[b.id] || {};
+      const hasSelected = Object.values(bundleSelections).some(qty => qty > 0);
+      if (hasSelected) count += 1;
+    });
     return count;
   };
 
@@ -116,6 +142,7 @@ export function ExtrasStep({
   const currentExtras = extrasByCategory[effectiveCategoryId] || [];
   const currentPackaging = packagingByCategory[effectiveCategoryId] || [];
   const currentWaiter = waiterByCategory[effectiveCategoryId] || [];
+  const currentBundles = bundlesByCategory[effectiveCategoryId] || [];
 
   return (
     <div className="pb-24">
@@ -250,9 +277,42 @@ export function ExtrasStep({
               </Card>
             );
           })}
+
+          {/* Extra bundles */}
+          {currentBundles.map((bundle: ExpandableExtra) => {
+            const bundleSelections = selectedExpandableExtras[bundle.id] || {};
+            const totalSelected = Object.values(bundleSelections).reduce((sum, qty) => sum + qty, 0);
+            const isSelected = totalSelected > 0;
+            const hasImage = bundle.image;
+            const priceRange = bundle.variants.length > 0
+              ? `od ${Math.min(...bundle.variants.map(v => v.price)).toFixed(0)} zł`
+              : `${bundle.basePrice.toFixed(0)} zł`;
+            return (
+              <Card key={bundle.id} onClick={() => setSelectedExtraBundle(bundle)} className={cn("cursor-pointer transition-all duration-200 hover:shadow-md active:scale-[0.99] overflow-hidden", isSelected && "ring-2 ring-primary")}>
+                <CardContent className="p-3">
+                  <div className="flex items-center gap-3">
+                    <div className={cn("w-16 h-16 rounded-lg flex items-center justify-center shrink-0 relative overflow-hidden", !hasImage && (isSelected ? "bg-primary/10" : "bg-muted"))}>
+                      {hasImage ? <img src={bundle.image} alt={bundle.name} className="w-full h-full object-cover" /> : <UtensilsCrossed className="w-6 h-6 text-muted-foreground" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-foreground text-sm">{bundle.name}</h3>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-sm font-bold text-primary">{priceRange}</span>
+                        <span className="text-xs text-muted-foreground">({bundle.variants.length} wariantów)</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {totalSelected > 0 && <Badge className="bg-primary text-primary-foreground text-xs px-1.5 py-0.5">{totalSelected}</Badge>}
+                      <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
 
-        {currentExtras.length === 0 && currentPackaging.length === 0 && currentWaiter.length === 0 && (
+        {currentExtras.length === 0 && currentPackaging.length === 0 && currentWaiter.length === 0 && currentBundles.length === 0 && (
           <p className="text-sm text-muted-foreground text-center py-6">Brak pozycji w tej kategorii</p>
         )}
       </div>
@@ -279,6 +339,13 @@ export function ExtrasStep({
         isSelected={selectedWaiterService === selectedWaiterOption?.id}
         waiterCount={selectedWaiterService === selectedWaiterOption?.id ? waiterCount : 1}
         onSelect={(count) => { if (selectedWaiterOption) onWaiterServiceChange(selectedWaiterOption.id, count); }}
+      />
+      <ExtraBundleModal
+        bundle={selectedExtraBundle}
+        isOpen={!!selectedExtraBundle}
+        onClose={() => setSelectedExtraBundle(null)}
+        selectedVariants={selectedExtraBundle ? selectedExpandableExtras[selectedExtraBundle.id] || {} : {}}
+        onVariantChange={(variantId, qty) => { if (selectedExtraBundle) onExpandableExtraChange(selectedExtraBundle.id, variantId, qty); }}
       />
     </div>
   );
@@ -424,6 +491,73 @@ function WaiterServiceModal({ option, isOpen, onClose, isSelected, waiterCount, 
           </div>
         </div>
         <div className="p-4 border-t border-border bg-background shrink-0"><Button onClick={handleSelect} className="w-full" size="lg">{isSelected ? "Zaktualizuj" : "Wybierz"}</Button></div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ============= EXTRA BUNDLE MODAL =============
+
+function ExtraBundleModal({ bundle, isOpen, onClose, selectedVariants, onVariantChange }: {
+  bundle: ExpandableExtra | null;
+  isOpen: boolean;
+  onClose: () => void;
+  selectedVariants: Record<string, number>;
+  onVariantChange: (variantId: string, qty: number) => void;
+}) {
+  if (!bundle) return null;
+
+  const totalSelected = Object.values(selectedVariants).reduce((sum, qty) => sum + qty, 0);
+  const totalPrice = bundle.variants.reduce((sum, v) => sum + v.price * (selectedVariants[v.id] || 0), 0);
+
+  return (
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent hideCloseButton className="h-[100dvh] max-h-[100dvh] w-full max-w-full m-0 p-0 rounded-none border-0 flex flex-col md:h-auto md:max-h-[85vh] md:max-w-2xl md:rounded-2xl md:border">
+        <DialogTitle className="sr-only">{bundle.name}</DialogTitle>
+        <div className="absolute top-4 right-4 z-10">
+          <button onClick={onClose} className="p-2 rounded-full bg-background/80 backdrop-blur-sm border border-border shadow-sm hover:bg-muted transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          {bundle.image && <div className="relative w-full h-48 md:h-64"><img src={bundle.image} alt={bundle.name} className="w-full h-full object-cover" /></div>}
+          <div className="p-5 space-y-4">
+            <div>
+              <h2 className="text-xl font-bold">{bundle.name}</h2>
+              {bundle.description && <p className="text-muted-foreground mt-1">{bundle.description}</p>}
+            </div>
+            {bundle.longDescription && <p className="text-sm text-muted-foreground">{bundle.longDescription}</p>}
+
+            <div className="space-y-3">
+              <h3 className="font-semibold">Wybierz warianty:</h3>
+              {bundle.variants.map((variant) => {
+                const qty = selectedVariants[variant.id] || 0;
+                return (
+                  <div key={variant.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                    <div className="flex-1">
+                      <p className="font-medium text-sm">{variant.name}</p>
+                      {variant.description && <p className="text-xs text-muted-foreground">{variant.description}</p>}
+                      <p className="text-sm font-bold text-primary mt-1">{variant.price.toFixed(0)} zł</p>
+                    </div>
+                    <QuantityInput value={qty} onChange={(v) => onVariantChange(variant.id, Math.max(0, v))} min={0} size="sm" />
+                  </div>
+                );
+              })}
+            </div>
+
+            {totalSelected > 0 && (
+              <div className="p-4 bg-accent rounded-xl">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Wybrano {totalSelected} wariantów</span>
+                  <span className="text-lg font-bold text-primary">{totalPrice.toFixed(0)} zł</span>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="p-4 border-t border-border bg-background shrink-0">
+          <Button onClick={onClose} className="w-full" size="lg">Zamknij</Button>
+        </div>
       </DialogContent>
     </Dialog>
   );

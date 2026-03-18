@@ -4,7 +4,7 @@ import { useCateringOrder } from "@/hooks/useCateringOrder";
 import { useAppData } from "@/hooks/useAppData";
 import { submitOrder, type SubmissionType } from "@/lib/submitOrder";
 import type { Product, Category } from "@/data/products";
-import type { ExtraItem, PackagingOption, WaiterServiceOption, ExtrasCategory, PaymentMethod } from "@/data/extras";
+import type { ExtraItem, PackagingOption, WaiterServiceOption, ExtrasCategory, PaymentMethod, ExpandableExtra } from "@/data/extras";
 import { MobileNav } from "./MobileNav";
 import { EventDetails } from "./EventDetails";
 import { ProductsStep } from "./ProductsStep";
@@ -22,6 +22,7 @@ export function CateringWizard() {
     extraItems,
     packagingOptions,
     waiterServiceOptions,
+    extraBundles,
     paymentMethods,
     blockedDates,
     deliveryConfig,
@@ -37,6 +38,7 @@ export function CateringWizard() {
   const extraItemsTyped = (extraItems ?? []) as ExtraItem[];
   const packagingOptionsTyped = (packagingOptions ?? []) as PackagingOption[];
   const waiterServiceOptionsTyped = (waiterServiceOptions ?? []) as WaiterServiceOption[];
+  const extraBundlesTyped = (extraBundles ?? []) as ExpandableExtra[];
   const paymentMethodsTyped = (paymentMethods ?? []) as PaymentMethod[];
   const blockedDatesTyped = (blockedDates ?? []).map((d) => (typeof d === "string" ? new Date(d) : d));
 
@@ -52,13 +54,14 @@ export function CateringWizard() {
     updateServingTime,
     updateProductNotes,
     updateExtra,
+    updateExpandableExtra,
     updatePackaging,
     updateWaiterService,
     nextStep,
     prevStep,
     updateOrder,
     resetOrder,
-  } = useCateringOrder(products, extraItemsTyped, packagingOptionsTyped, waiterServiceOptionsTyped);
+  } = useCateringOrder(products, extraItemsTyped, packagingOptionsTyped, waiterServiceOptionsTyped, extraBundlesTyped);
 
   // Filter categories based on selected event type mappings
   const filteredCategories = useMemo(() => {
@@ -85,6 +88,7 @@ export function CateringWizard() {
       extraItemsTyped,
       packagingOptionsTyped,
       waiterServiceOptionsTyped,
+      extraBundlesTyped,
       eventTypes,
       submissionType,
     );
@@ -199,17 +203,20 @@ export function CateringWizard() {
           <ExtrasStep
             extrasCategories={extrasCategories}
             selectedExtras={order.selectedExtras}
+            selectedExpandableExtras={order.selectedExpandableExtras}
             selectedPackaging={order.selectedPackaging}
             packagingPersonCount={order.packagingPersonCount}
             selectedWaiterService={order.selectedWaiterService}
             waiterCount={order.waiterCount}
             onExtraChange={updateExtra}
+            onExpandableExtraChange={updateExpandableExtra}
             onPackagingChange={updatePackaging}
             onWaiterServiceChange={updateWaiterService}
             guestCount={order.guestCount}
             extraItems={extraItemsTyped}
             packagingOptions={packagingOptionsTyped}
             waiterServiceOptions={waiterServiceOptionsTyped}
+            extraBundles={extraBundlesTyped}
           />
         );
       case 3:
@@ -257,6 +264,7 @@ export function CateringWizard() {
             extraItems={extraItemsTyped}
             packagingOptions={packagingOptionsTyped}
             waiterServiceOptions={waiterServiceOptionsTyped}
+            extraBundles={extraBundlesTyped}
             paymentMethods={paymentMethodsTyped}
             minOrderValue={orderConfig.minOrderValue}
           />

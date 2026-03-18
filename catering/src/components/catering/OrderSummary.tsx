@@ -5,7 +5,7 @@ import {
   PartyPopper, StickyNote
 } from "lucide-react";
 import type { Product, Category, EventType } from "@/data/products";
-import type { ExtraItem, PackagingOption, WaiterServiceOption, PaymentMethod } from "@/data/extras";
+import type { ExtraItem, PackagingOption, WaiterServiceOption, PaymentMethod, ExpandableExtra } from "@/data/extras";
 import type { CateringOrder } from "@/hooks/useCateringOrder";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -28,13 +28,14 @@ type OrderSummaryProps = {
   extraItems: ExtraItem[];
   packagingOptions: PackagingOption[];
   waiterServiceOptions: WaiterServiceOption[];
+  extraBundles: ExpandableExtra[];
   paymentMethods: PaymentMethod[];
   minOrderValue?: number;
 };
 
 export function OrderSummary({ 
   order, totalPrice, onSubmit, onResetOrder,
-  products, eventTypes, extraItems, packagingOptions, waiterServiceOptions,
+  products, eventTypes, extraItems, packagingOptions, waiterServiceOptions, extraBundles,
   minOrderValue = 0,
 }: OrderSummaryProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -120,6 +121,22 @@ export function OrderSummary({
     if (qty > 0) {
       const extra = extraItems.find(e => e.id === extraId);
       if (extra) extrasLines.push({ name: extra.name, quantity: qty, price: getExtraPrice(extra, ct) * qty });
+    }
+  }
+
+  // Expandable extras (extra bundles)
+  for (const [bundleId, variants] of Object.entries(order.selectedExpandableExtras ?? {})) {
+    const bundle = extraBundles.find(b => b.id === bundleId);
+    if (bundle) {
+      for (const [variantId, qty] of Object.entries(variants)) {
+        if (qty > 0) {
+          const variant = bundle.variants.find(v => v.id === variantId);
+          if (variant) {
+            const variantPrice = ct === "na_sali" && variant.priceOnSite != null ? variant.priceOnSite : variant.price;
+            extrasLines.push({ name: `${bundle.name}: ${variant.name}`, quantity: qty, price: variantPrice * qty });
+          }
+        }
+      }
     }
   }
 

@@ -103,7 +103,8 @@ model ExtrasCategory {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  extras Extra[]
+  extras       Extra[]
+  extraBundles ExtraBundle[]
 
   @@map("extras_categories")
 }
@@ -251,9 +252,51 @@ model Extra {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
-  extrasCategory ExtrasCategory? @relation(fields: [extrasCategoryId], references: [id])
+  extrasCategory      ExtrasCategory?      @relation(fields: [extrasCategoryId], references: [id])
+  extraBundleVariants ExtraBundleVariant[]
 
   @@map("extras")
+}
+
+// ============== Extra Bundles ==============
+model ExtraBundle {
+  id               String   @id @default(uuid())
+  name             String
+  description      String   @default("")
+  longDescription  String   @default("")
+  imageUrl         String?
+  category         String   @default("dodatki")
+  extrasCategoryId String?
+  priceNetto       Decimal  @default(0)
+  vatRate          Int      @default(23)
+  priceBrutto      Decimal  @default(0)
+  basePrice        Decimal  @default(0)
+  minQuantity      Int      @default(1)
+  icon             String   @default("✨")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  extrasCategory      ExtrasCategory?      @relation(fields: [extrasCategoryId], references: [id])
+  extraBundleVariants ExtraBundleVariant[]
+
+  @@map("extra_bundles")
+}
+
+model ExtraBundleVariant {
+  id          String   @id @default(uuid())
+  bundleId    String
+  name        String
+  description String   @default("")
+  price       Decimal  @default(0)
+  priceOnSite Decimal?
+  extraId     String?
+  contents    String[] @default([])
+  sortOrder   Int      @default(0)
+
+  bundle ExtraBundle @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+  extra  Extra?      @relation(fields: [extraId], references: [id])
+
+  @@map("extra_bundle_variants")
 }
 
 // ============== Ingredients ==============

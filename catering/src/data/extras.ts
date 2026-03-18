@@ -48,6 +48,28 @@ export type ExtrasCategory = {
   required?: boolean;
 };
 
+export type ExtraVariant = {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  priceOnSite?: number | null;
+  contents?: string[];
+};
+
+export type ExpandableExtra = {
+  type: "expandable";
+  id: string;
+  name: string;
+  description: string;
+  longDescription?: string;
+  image?: string;
+  basePrice: number;
+  minQuantity: number;
+  extrasCategoryId?: string;
+  variants: ExtraVariant[];
+};
+
 // ============= EXTRAS - ADDITIONAL SERVICES =============
 
 export const extraItems: ExtraItem[] = [

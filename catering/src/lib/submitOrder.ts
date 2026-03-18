@@ -1,8 +1,8 @@
 import { submitOrder as apiSubmitOrder } from "@/api/client";
 import type { CateringOrder } from "@/hooks/useCateringOrder";
 import type { Product } from "@/data/products";
-import type { ExtraItem, PackagingOption, WaiterServiceOption } from "@/data/extras";
-import { getSimplePrice, getVariantPrice, getConfigurablePrice, getExtraPrice, getPackagingPrice, getWaiterPrice } from "@/lib/pricing";
+import type { ExtraItem, PackagingOption, WaiterServiceOption, ExpandableExtra } from "@/data/extras";
+import { getSimplePrice, getVariantPrice, getConfigurablePrice, getExtraPrice, getPackagingPrice, getWaiterPrice, getExtraBundleVariantPrice } from "@/lib/pricing";
 
 export type SubmissionType = "order" | "offer";
 
@@ -13,6 +13,7 @@ export async function submitOrder(
   extraItems: ExtraItem[],
   packagingOptions: PackagingOption[],
   waiterServiceOptions: WaiterServiceOption[],
+  extraBundles: ExpandableExtra[],
   eventTypes: { id: string; name: string }[],
   submissionType: SubmissionType = "offer",
 ): Promise<{ orderId: string; orderNumber: string }> {
@@ -97,6 +98,28 @@ export async function submitOrder(
           unit: extra.unitLabel,
           itemType: "extra",
         });
+      }
+    }
+  }
+
+  for (const [bundleId, variants] of Object.entries(order.selectedExpandableExtras ?? {})) {
+    const bundle = extraBundles.find((b) => b.id === bundleId);
+    if (bundle) {
+      for (const [variantId, qty] of Object.entries(variants)) {
+        if (qty > 0) {
+          const variant = bundle.variants.find((v) => v.id === variantId);
+          if (variant) {
+            const price = getExtraBundleVariantPrice(variant, ct);
+            orderItems.push({
+              name: `${bundle.name}: ${variant.name}`,
+              quantity: qty,
+              pricePerUnit: price,
+              total: price * qty,
+              unit: "szt.",
+              itemType: "extra_bundle",
+            });
+          }
+        }
       }
     }
   }

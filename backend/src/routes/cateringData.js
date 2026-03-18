@@ -147,7 +147,7 @@ router.get("/extras-categories", async (_req, res) => {
   );
 });
 
-/** GET /api/extras - returns { extraItems, packagingOptions, waiterServiceOptions } */
+/** GET /api/extras - returns { extraItems, packagingOptions, waiterServiceOptions, extraBundles } */
 router.get("/extras", async (_req, res) => {
   const rows = await prisma.extra.findMany({ orderBy: { sortOrder: "asc" } });
   const extraItems = [];
@@ -185,7 +185,35 @@ router.get("/extras", async (_req, res) => {
     }
   }
 
-  res.json({ extraItems, packagingOptions, waiterServiceOptions });
+  const bundleRows = await prisma.extraBundle.findMany({
+    include: { extraBundleVariants: { orderBy: { sortOrder: "asc" } } },
+    orderBy: { name: "asc" },
+  });
+
+  const extraBundles = bundleRows.map((b) => {
+    const variants = (b.extraBundleVariants ?? []).map((v) => ({
+      id: v.id,
+      name: v.name,
+      description: v.description ?? "",
+      price: toNum(v.price) ?? 0,
+      priceOnSite: toNum(v.priceOnSite),
+      contents: v.contents ?? [],
+    }));
+    return {
+      type: "expandable",
+      id: b.id,
+      name: b.name,
+      description: b.description ?? "",
+      longDescription: b.longDescription ?? undefined,
+      image: b.imageUrl ?? undefined,
+      basePrice: toNum(b.basePrice) ?? 0,
+      minQuantity: b.minQuantity ?? 1,
+      extrasCategoryId: b.extrasCategoryId ?? undefined,
+      variants,
+    };
+  });
+
+  res.json({ extraItems, packagingOptions, waiterServiceOptions, extraBundles });
 });
 
 /** GET /api/payment-methods */

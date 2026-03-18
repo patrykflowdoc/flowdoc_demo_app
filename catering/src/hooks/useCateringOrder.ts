@@ -1,8 +1,8 @@
 import { useState, useMemo, useCallback } from "react";
 import type { Product } from "@/data/products";
-import type { ExtraItem, PackagingOption, WaiterServiceOption } from "@/data/extras";
+import type { ExtraItem, PackagingOption, WaiterServiceOption, ExpandableExtra } from "@/data/extras";
 import type { CateringType } from "@/lib/pricing";
-import { getSimplePrice, getVariantPrice, getConfigurablePrice, getExtraPrice, getPackagingPrice, getWaiterPrice } from "@/lib/pricing";
+import { getSimplePrice, getVariantPrice, getConfigurablePrice, getExtraPrice, getPackagingPrice, getWaiterPrice, getExtraBundleVariantPrice } from "@/lib/pricing";
 
 export type OrderItem = {
   productId: string;
@@ -22,6 +22,7 @@ export type CateringOrder = {
   servingTimes: Record<string, string>;
   productNotes: Record<string, string>;
   selectedExtras: Record<string, number>;
+  selectedExpandableExtras: Record<string, Record<string, number>>;
   selectedPackaging: string | null;
   packagingPersonCount: number;
   selectedWaiterService: string | null;
@@ -54,6 +55,7 @@ const initialOrder: CateringOrder = {
   servingTimes: {},
   productNotes: {},
   selectedExtras: {},
+  selectedExpandableExtras: {},
   selectedPackaging: null,
   packagingPersonCount: 0,
   selectedWaiterService: null,
@@ -79,6 +81,7 @@ export function useCateringOrder(
   extraItems: ExtraItem[] = [],
   packagingOptionsList: PackagingOption[] = [],
   waiterServiceOptionsList: WaiterServiceOption[] = [],
+  extraBundles: ExpandableExtra[] = [],
 ) {
   const [order, setOrder] = useState<CateringOrder>(initialOrder);
   const [currentStep, setCurrentStep] = useState(0);
@@ -139,6 +142,20 @@ export function useCateringOrder(
       }
     }
 
+    for (const [bundleId, variants] of Object.entries(order.selectedExpandableExtras)) {
+      const bundle = extraBundles.find(b => b.id === bundleId);
+      if (bundle) {
+        for (const [variantId, qty] of Object.entries(variants)) {
+          if (qty > 0) {
+            const variant = bundle.variants.find(v => v.id === variantId);
+            if (variant) {
+              total += getExtraBundleVariantPrice(variant, ct) * qty;
+            }
+          }
+        }
+      }
+    }
+
     if (order.selectedPackaging) {
       const packaging = packagingOptionsList.find(p => p.id === order.selectedPackaging);
       if (packaging && getPackagingPrice(packaging, ct) > 0) {
@@ -156,7 +173,7 @@ export function useCateringOrder(
     total += order.deliveryPrice;
     
     return total;
-  }, [order.cateringType, order.simpleQuantities, order.expandableQuantities, order.configurableData, order.selectedExtras, order.selectedPackaging, order.packagingPersonCount, order.selectedWaiterService, order.waiterCount, order.deliveryPrice, products, extraItems, packagingOptionsList, waiterServiceOptionsList]);
+  }, [order.cateringType, order.simpleQuantities, order.expandableQuantities, order.configurableData, order.selectedExtras, order.selectedExpandableExtras, order.selectedPackaging, order.packagingPersonCount, order.selectedWaiterService, order.waiterCount, order.deliveryPrice, products, extraItems, packagingOptionsList, waiterServiceOptionsList, extraBundles]);
 
   const updateSimpleQuantity = useCallback((productId: string, quantity: number) => {
     setOrder((prev) => ({
@@ -196,6 +213,16 @@ export function useCateringOrder(
 
   const updateExtra = useCallback((extraId: string, quantity: number) => {
     setOrder((prev) => ({ ...prev, selectedExtras: { ...prev.selectedExtras, [extraId]: quantity } }));
+  }, []);
+
+  const updateExpandableExtra = useCallback((bundleId: string, variantId: string, quantity: number) => {
+    setOrder((prev) => ({
+      ...prev,
+      selectedExpandableExtras: {
+        ...prev.selectedExpandableExtras,
+        [bundleId]: { ...(prev.selectedExpandableExtras[bundleId] || {}), [variantId]: quantity },
+      },
+    }));
   }, []);
 
   const updatePackaging = useCallback((packagingId: string | null, personCount: number) => {
@@ -263,6 +290,7 @@ export function useCateringOrder(
     updateServingTime,
     updateProductNotes,
     updateExtra,
+    updateExpandableExtra,
     updatePackaging,
     updateWaiterService,
     updateItemQuantity,

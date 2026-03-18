@@ -446,6 +446,22 @@ export async function deleteBundle(id: string): Promise<void> {
   return request(`/api/admin/bundles/${id}`, { method: "DELETE" });
 }
 
+export async function getAdminExtraBundles(): Promise<unknown[]> {
+  return request("/api/admin/extra-bundles");
+}
+
+export async function createExtraBundle(body: Record<string, unknown>): Promise<unknown> {
+  return request("/api/admin/extra-bundles", { method: "POST", body });
+}
+
+export async function updateExtraBundle(id: string, body: Record<string, unknown>): Promise<unknown> {
+  return request(`/api/admin/extra-bundles/${id}`, { method: "PATCH", body });
+}
+
+export async function deleteExtraBundle(id: string): Promise<void> {
+  return request(`/api/admin/extra-bundles/${id}`, { method: "DELETE" });
+}
+
 export async function getAdminConfigurableSets(): Promise<unknown[]> {
   return request("/api/admin/configurable-sets");
 }

@@ -582,6 +582,113 @@ router.delete("/extras/:id", requireCsrf, async (req, res) => {
   res.status(204).send();
 });
 
+// ─── Extra Bundles & extra_bundle_variants ────────────────────────────
+router.get("/extra-bundles", async (_req, res) => {
+  const rows = await prisma.extraBundle.findMany({
+    include: { extraBundleVariants: { orderBy: { sortOrder: "asc" } } },
+    orderBy: { name: "asc" },
+  });
+  res.json(rows);
+});
+
+router.post("/extra-bundles", requireCsrf, async (req, res) => {
+  const b = req.body ?? {};
+  const bundlePayload = {
+    name: b.name ?? "",
+    description: b.description ?? "",
+    longDescription: b.long_description ?? b.longDescription ?? "",
+    imageUrl: b.image_url ?? b.imageUrl ?? null,
+    category: b.category ?? "dodatki",
+    extrasCategoryId: b.extras_category_id ?? b.extrasCategoryId ?? null,
+    priceNetto: Number(b.price_netto ?? b.priceNetto ?? 0),
+    vatRate: Number(b.vat_rate ?? b.vatRate ?? 23),
+    priceBrutto: Number(b.price_brutto ?? b.priceBrutto ?? 0),
+    basePrice: Number(b.base_price ?? b.basePrice ?? 0),
+    minQuantity: Number(b.min_quantity ?? b.minQuantity ?? 1),
+    icon: b.icon ?? "✨",
+  };
+  const created = await prisma.extraBundle.create({
+    data: bundlePayload,
+    include: { extraBundleVariants: true },
+  });
+  if (Array.isArray(b.extra_bundle_variants) && b.extra_bundle_variants.length > 0) {
+    await prisma.extraBundleVariant.createMany({
+      data: b.extra_bundle_variants.map((v, i) => ({
+        bundleId: created.id,
+        name: v.name ?? "",
+        description: v.description ?? "",
+        price: Number(v.price ?? 0),
+        priceOnSite: v.price_on_site != null ? Number(v.price_on_site) : null,
+        extraId: v.extra_id ?? v.extraId ?? null,
+        contents: Array.isArray(v.contents) ? v.contents : [],
+        sortOrder: v.sort_order ?? v.sortOrder ?? i,
+      })),
+    });
+  }
+  const withVar = await prisma.extraBundle.findUnique({
+    where: { id: created.id },
+    include: { extraBundleVariants: { orderBy: { sortOrder: "asc" } } },
+  });
+  res.status(201).json(withVar);
+});
+
+router.patch("/extra-bundles/:id", requireCsrf, async (req, res) => {
+  const id = req.params.id;
+  const b = req.body ?? {};
+  const data = {};
+  if (b.name !== undefined) data.name = String(b.name);
+  if (b.description !== undefined) data.description = String(b.description);
+  if (b.long_description !== undefined || b.longDescription !== undefined)
+    data.longDescription = String(b.long_description ?? b.longDescription);
+  if (b.image_url !== undefined || b.imageUrl !== undefined)
+    data.imageUrl = b.image_url ?? b.imageUrl ?? null;
+  if (b.category !== undefined) data.category = String(b.category);
+  if (b.extras_category_id !== undefined || b.extrasCategoryId !== undefined)
+    data.extrasCategoryId = b.extras_category_id ?? b.extrasCategoryId ?? null;
+  if (b.price_netto !== undefined || b.priceNetto !== undefined)
+    data.priceNetto = Number(b.price_netto ?? b.priceNetto);
+  if (b.vat_rate !== undefined || b.vatRate !== undefined)
+    data.vatRate = Number(b.vat_rate ?? b.vatRate);
+  if (b.price_brutto !== undefined || b.priceBrutto !== undefined)
+    data.priceBrutto = Number(b.price_brutto ?? b.priceBrutto);
+  if (b.base_price !== undefined || b.basePrice !== undefined)
+    data.basePrice = Number(b.base_price ?? b.basePrice);
+  if (b.min_quantity !== undefined || b.minQuantity !== undefined)
+    data.minQuantity = Number(b.min_quantity ?? b.minQuantity);
+  if (b.icon !== undefined) data.icon = String(b.icon);
+
+  if (Object.keys(data).length > 0) await prisma.extraBundle.update({ where: { id }, data });
+
+  if (Array.isArray(b.extra_bundle_variants)) {
+    await prisma.extraBundleVariant.deleteMany({ where: { bundleId: id } });
+    if (b.extra_bundle_variants.length > 0) {
+      await prisma.extraBundleVariant.createMany({
+        data: b.extra_bundle_variants.map((v, i) => ({
+          bundleId: id,
+          name: v.name ?? "",
+          description: v.description ?? "",
+          price: Number(v.price ?? 0),
+          priceOnSite: v.price_on_site != null ? Number(v.price_on_site) : null,
+          extraId: v.extra_id ?? v.extraId ?? null,
+          contents: Array.isArray(v.contents) ? v.contents : [],
+          sortOrder: v.sort_order ?? v.sortOrder ?? i,
+        })),
+      });
+    }
+  }
+  const updated = await prisma.extraBundle.findUnique({
+    where: { id },
+    include: { extraBundleVariants: { orderBy: { sortOrder: "asc" } } },
+  });
+  res.json(updated);
+});
+
+router.delete("/extra-bundles/:id", requireCsrf, async (req, res) => {
+  await prisma.extraBundleVariant.deleteMany({ where: { bundleId: req.params.id } });
+  await prisma.extraBundle.delete({ where: { id: req.params.id } });
+  res.status(204).send();
+});
+
 // ─── Delivery zones (admin: all, not only active) ─────────────────────
 /** GET /api/admin/delivery-zones - all */
 router.get("/delivery-zones", async (_req, res) => {

@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Trash2, Pencil, Search, Apple, CookingPot, X, Check, ImagePlus, Package, Settings2, Sparkles, Loader2 } from "lucide-react";
+import { Plus, Trash2, Pencil, Search, Apple, CookingPot, X, Check, ImagePlus, Package, Settings2, Sparkles, Loader2, Layers } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn, randomUUID } from "@/lib/utils";
@@ -68,6 +68,20 @@ interface ConfigSet {
   id: string; name: string; description: string; longDescription: string;
   image: string | null; pricePerPerson: number; pricePerPersonOnSite: number | null; minPersons: number;
   icon: string; categorySlug: string | null; groups: ConfigGroup[];
+}
+
+interface ExtraBundleVariant {
+  id: string; name: string; description: string; price: number; priceOnSite: number | null;
+  contents: string[]; sortOrder: number;
+  extraId: string | null;
+}
+
+interface ExtraBundle {
+  id: string; name: string; description: string; longDescription: string;
+  image: string | null; priceNetto: number; vatRate: number; priceBrutto: number;
+  basePrice: number; minQuantity: number; icon: string;
+  category: string; extrasCategoryId: string | null;
+  variants: ExtraBundleVariant[];
 }
 
 // ===== IMAGE UPLOAD =====
@@ -860,6 +874,294 @@ const BundlesTab = ({ bundles, dishes, categories, reload }: { bundles: Bundle[]
   );
 };
 
+// ===== EXTRA BUNDLES TAB =====
+const ExtraBundlesTab = ({ extraBundles, extras, extrasCategories, reload }: { extraBundles: ExtraBundle[]; extras: Extra[]; extrasCategories: {id:string;name:string;slug:string}[]; reload: () => void }) => {
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const [formName, setFormName] = useState("");
+  const [formDesc, setFormDesc] = useState("");
+  const [formLongDesc, setFormLongDesc] = useState("");
+  const [formImage, setFormImage] = useState<string | null>(null);
+  const [formPriceNetto, setFormPriceNetto] = useState("");
+  const [formVat, setFormVat] = useState(23);
+  const [formPriceBrutto, setFormPriceBrutto] = useState("");
+  const [formBasePrice, setFormBasePrice] = useState("");
+  const [formMinQty, setFormMinQty] = useState("1");
+  const [formIcon, setFormIcon] = useState("✨");
+  const [formCategory, setFormCategory] = useState("dodatki");
+  const [formExtrasCategoryId, setFormExtrasCategoryId] = useState<string | null>(null);
+  const [formVariants, setFormVariants] = useState<ExtraBundleVariant[]>([]);
+
+  const [showVariantPicker, setShowVariantPicker] = useState(false);
+
+  const calcBrutto = (n: number, v: number) => +(n * (1 + v / 100)).toFixed(2);
+  const calcNetto = (b: number, v: number) => +(b / (1 + v / 100)).toFixed(2);
+
+  const handleNettoChange = (val: string) => { setFormPriceNetto(val); const n = parseFloat(val); if (!isNaN(n)) setFormPriceBrutto(calcBrutto(n, formVat).toString()); };
+  const handleBruttoChange = (val: string) => { setFormPriceBrutto(val); const b = parseFloat(val); if (!isNaN(b)) setFormPriceNetto(calcNetto(b, formVat).toString()); };
+  const handleVatChange = (val: string) => { const vat = parseInt(val); setFormVat(vat); const n = parseFloat(formPriceNetto); if (!isNaN(n)) setFormPriceBrutto(calcBrutto(n, vat).toString()); };
+
+  const resetForm = () => {
+    setFormName(""); setFormDesc(""); setFormLongDesc(""); setFormImage(null); setFormPriceNetto("");
+    setFormVat(23); setFormPriceBrutto(""); setFormBasePrice(""); setFormMinQty("1"); setFormIcon("✨");
+    setFormCategory("dodatki"); setFormExtrasCategoryId(null); setFormVariants([]); setShowForm(false); setEditingId(null);
+    setShowVariantPicker(false);
+  };
+
+  const addExtraAsVariant = (extra: Extra) => {
+    if (formVariants.some(v => v.extraId === extra.id)) {
+      toast.info("Ten dodatek jest już dodany jako wariant");
+      return;
+    }
+    const v: ExtraBundleVariant = {
+      id: randomUUID(), name: extra.name, description: extra.description,
+      price: extra.priceBrutto, priceOnSite: extra.priceOnSite,
+      contents: [...extra.contents], sortOrder: formVariants.length,
+      extraId: extra.id,
+    };
+    setFormVariants([...formVariants, v]);
+    setShowVariantPicker(false);
+  };
+
+  const startEdit = (b: ExtraBundle) => {
+    setEditingId(b.id); setFormName(b.name); setFormDesc(b.description); setFormLongDesc(b.longDescription);
+    setFormImage(b.image); setFormPriceNetto(b.priceNetto.toString()); setFormVat(b.vatRate);
+    setFormPriceBrutto(b.priceBrutto.toString()); setFormBasePrice(b.basePrice.toString());
+    setFormMinQty(b.minQuantity.toString()); setFormIcon(b.icon);
+    setFormCategory(b.category); setFormExtrasCategoryId(b.extrasCategoryId);
+    setFormVariants([...b.variants]); setShowForm(true);
+  };
+
+  const save = async () => {
+    if (!formName.trim()) { toast.error("Podaj nazwę pakietu"); return; }
+    setSaving(true);
+    const priceBrutto = parseFloat(formPriceBrutto) || 0;
+    const bundlePayload = {
+      name: formName.trim(), description: formDesc.trim(), long_description: formLongDesc.trim(),
+      image_url: formImage, price_netto: parseFloat(formPriceNetto) || 0, vat_rate: formVat,
+      price_brutto: priceBrutto, base_price: parseFloat(formBasePrice) || priceBrutto,
+      min_quantity: parseInt(formMinQty) || 1, icon: formIcon,
+      category: formCategory, extras_category_id: formExtrasCategoryId,
+    };
+
+    const bundleVariantsPayload = formVariants.map((v, i) => ({
+      name: v.name,
+      description: v.description ?? "",
+      price: v.price,
+      price_on_site: v.priceOnSite,
+      contents: v.contents ?? [],
+      sort_order: i,
+      extra_id: v.extraId || null,
+    }));
+    try {
+      if (editingId) {
+        await api.updateExtraBundle(editingId, { ...bundlePayload, extra_bundle_variants: bundleVariantsPayload });
+      } else {
+        await api.createExtraBundle({ ...bundlePayload, extra_bundle_variants: bundleVariantsPayload });
+      }
+    } catch (err: unknown) {
+      toast.error("Błąd: " + (err instanceof Error ? err.message : String(err)));
+      setSaving(false);
+      return;
+    }
+    setSaving(false);
+    toast.success(editingId ? "Pakiet dodatków zaktualizowany" : "Pakiet dodatków dodany");
+    resetForm();
+    reload();
+  };
+
+  const remove = async (id: string) => {
+    try {
+      await api.deleteExtraBundle(id);
+      toast.success("Usunięto");
+      reload();
+    } catch (err: unknown) {
+      toast.error("Błąd: " + (err instanceof Error ? err.message : String(err)));
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-4">
+        <p className="text-sm text-muted-foreground">Pakiety dodatków z wariantami — warianty tworzone z istniejących dodatków</p>
+        <Button size="sm" onClick={() => { resetForm(); setShowForm(true); }}>
+          <Plus className="w-4 h-4 mr-1" />Dodaj pakiet
+        </Button>
+      </div>
+
+      {showForm && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">{editingId ? "Edytuj pakiet dodatków" : "Nowy pakiet dodatków"}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex gap-4">
+              <ImageUpload image={formImage} onChange={setFormImage} />
+              <div className="flex-1 space-y-2">
+                <div className="space-y-1">
+                  <Label className="text-xs">Nazwa</Label>
+                  <Input value={formName} onChange={(e) => setFormName(e.target.value)} placeholder="np. Pakiet dekoracji" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Opis</Label>
+                  <Input value={formDesc} onChange={(e) => setFormDesc(e.target.value)} />
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Typ dodatku</Label>
+                <Select value={formCategory} onValueChange={setFormCategory}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="dodatki">Dodatek</SelectItem>
+                    <SelectItem value="pakowanie">Pakowanie</SelectItem>
+                    <SelectItem value="obsluga">Obsługa kelnerska</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Kategoria dodatku</Label>
+                <Select value={formExtrasCategoryId ?? "none"} onValueChange={(v) => setFormExtrasCategoryId(v === "none" ? null : v)}>
+                  <SelectTrigger><SelectValue placeholder="Brak kategorii" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Brak kategorii</SelectItem>
+                    {extrasCategories.map(c => (
+                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs">Długi opis</Label>
+              <Input value={formLongDesc} onChange={(e) => setFormLongDesc(e.target.value)} />
+            </div>
+
+            <div className="grid grid-cols-4 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Cena netto</Label>
+                <Input type="number" step="0.01" value={formPriceNetto} onChange={(e) => handleNettoChange(e.target.value)} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">VAT</Label>
+                <Select value={formVat.toString()} onValueChange={handleVatChange}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>{VAT_RATES.map((r) => <SelectItem key={r} value={r.toString()}>{r}%</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Cena brutto</Label>
+                <Input type="number" step="0.01" value={formPriceBrutto} onChange={(e) => handleBruttoChange(e.target.value)} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Min. ilość</Label>
+                <Input type="number" value={formMinQty} onChange={(e) => setFormMinQty(e.target.value)} />
+              </div>
+            </div>
+
+            {/* Variants from extras */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs">Warianty z dodatków ({formVariants.length})</Label>
+                <Button type="button" size="sm" variant="outline" onClick={() => setShowVariantPicker(!showVariantPicker)} className="text-xs">
+                  <Plus className="w-3.5 h-3.5 mr-1" />Dodaj dodatek jako wariant
+                </Button>
+              </div>
+
+              {formVariants.map((v) => {
+                const linkedExtra = v.extraId ? extras.find(e => e.id === v.extraId) : null;
+                return (
+                  <div key={v.id} className="flex items-center justify-between px-3 py-2 rounded-md bg-muted/30">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium">{v.name}</span>
+                        <span className="text-xs text-muted-foreground">{v.price.toFixed(2)} zł</span>
+                        {v.priceOnSite != null && <span className="text-xs text-muted-foreground">(sala: {v.priceOnSite.toFixed(2)} zł)</span>}
+                        {linkedExtra && <Badge variant="outline" className="text-[10px] px-1.5 py-0">🔗 dodatek</Badge>}
+                      </div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Input type="number" step="0.01" value={v.price} onChange={(e) => setFormVariants(formVariants.map(fv => fv.id === v.id ? {...fv, price: parseFloat(e.target.value) || 0} : fv))} className="h-7 w-24 text-xs" placeholder="Cena" />
+                        <Input type="number" step="0.01" value={v.priceOnSite ?? ""} onChange={(e) => setFormVariants(formVariants.map(fv => fv.id === v.id ? {...fv, priceOnSite: e.target.value ? parseFloat(e.target.value) : null} : fv))} className="h-7 w-24 text-xs" placeholder="Cena sala" />
+                      </div>
+                    </div>
+                    <button onClick={() => setFormVariants(formVariants.filter(fv => fv.id !== v.id))}
+                      className="p-1 text-muted-foreground hover:text-destructive"><X className="w-3.5 h-3.5" /></button>
+                  </div>
+                );
+              })}
+
+              {showVariantPicker && (
+                <ExtraPicker extras={extras} selectedExtraId={null} onSelect={addExtraAsVariant} />
+              )}
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <Button size="sm" onClick={save} disabled={saving}>
+                {saving ? "Zapisuję..." : editingId ? "Zapisz zmiany" : "Dodaj pakiet"}
+              </Button>
+              <Button size="sm" variant="outline" onClick={resetForm}>Anuluj</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="space-y-2">
+        {extraBundles.map((b) => (
+          <Card key={b.id} className="group hover:shadow-sm transition-shadow">
+            <CardContent className="py-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                {b.image ? <img src={b.image} alt="" className="w-10 h-10 rounded-lg object-cover" /> : <Layers className="w-5 h-5 text-primary" />}
+                <div>
+                  <p className="text-sm font-medium">{b.name}</p>
+                  <p className="text-xs text-muted-foreground">{b.variants.length} wariantów</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-semibold text-primary">{b.priceBrutto.toFixed(2)} zł</span>
+                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button onClick={() => startEdit(b)} className="p-1.5 text-muted-foreground hover:text-foreground"><Pencil className="w-3.5 h-3.5" /></button>
+                  <button onClick={() => remove(b.id)} className="p-1.5 text-muted-foreground hover:text-destructive"><Trash2 className="w-3.5 h-3.5" /></button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+        {extraBundles.length === 0 && !showForm && <p className="text-sm text-muted-foreground text-center py-6">Brak pakietów dodatków</p>}
+      </div>
+    </div>
+  );
+};
+
+// ===== EXTRA PICKER (for extra bundles) =====
+const ExtraPicker = ({ extras, selectedExtraId, onSelect }: { extras: Extra[]; selectedExtraId: string | null; onSelect: (extra: Extra) => void }) => {
+  const [search, setSearch] = useState("");
+  const filtered = extras.filter(e => e.name.toLowerCase().includes(search.toLowerCase()));
+  return (
+    <div className="space-y-2">
+      <div className="relative">
+        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+        <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Szukaj dodatku..." className="h-8 text-xs pl-8" />
+      </div>
+      <div className="max-h-40 overflow-y-auto space-y-1 border border-border rounded-md p-1">
+        {filtered.length === 0 && <p className="text-xs text-muted-foreground text-center py-2">Brak dodatków — dodaj je najpierw w zakładce "Dodatki"</p>}
+        {filtered.map(e => (
+          <button key={e.id} onClick={() => onSelect(e)}
+            className={cn("w-full text-left px-2 py-1.5 rounded text-xs hover:bg-muted flex items-center gap-2", selectedExtraId === e.id && "bg-primary/10 text-primary")}>
+            <span className="flex-1">{e.name}</span>
+            <span className="text-muted-foreground">{e.priceBrutto.toFixed(2)} zł</span>
+            {selectedExtraId === e.id && <Check className="w-3.5 h-3.5" />}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 // ===== CONFIG SETS TAB =====
 const ConfigSetsTab = ({ configSets, dishes, categories, reload }: { configSets: ConfigSet[]; dishes: Dish[]; categories: CategoryOption[]; reload: () => void }) => {
   const [showForm, setShowForm] = useState(false);
@@ -1159,11 +1461,12 @@ const SettingsDishesView = () => {
   const [dishes, setDishes] = useState<Dish[]>([]);
   const [bundles, setBundles] = useState<Bundle[]>([]);
   const [configSets, setConfigSets] = useState<ConfigSet[]>([]);
+  const [extraBundles, setExtraBundles] = useState<ExtraBundle[]>([]);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [catData, ecData, ingData, diData, dishData, bundleData, setData, extrasData] = await Promise.all([
+      const [catData, ecData, ingData, diData, dishData, bundleData, setData, extrasData, extraBundleData] = await Promise.all([
         api.getAdminProductCategories(),
         api.getAdminExtrasCategories(),
         api.getAdminIngredients(),
@@ -1172,6 +1475,7 @@ const SettingsDishesView = () => {
         api.getAdminBundles(),
         api.getAdminConfigurableSets(),
         api.getAdminExtras(),
+        api.getAdminExtraBundles(),
       ]);
       const cats = (Array.isArray(catData) ? catData : []) as Record<string, unknown>[];
       setCategories(cats.map((c) => ({ slug: String(c.slug ?? ""), name: String(c.name ?? "") })));
@@ -1310,6 +1614,37 @@ const SettingsDishesView = () => {
         contents: (e.contents as string[]) ?? [],
         foodCost: Number(e.foodCost ?? e.food_cost ?? 0),
       })));
+
+      const extraBundlesArr = (Array.isArray(extraBundleData) ? extraBundleData : []) as Record<string, unknown>[];
+      setExtraBundles(extraBundlesArr.map((b) => {
+        const vars = (b.extraBundleVariants ?? b.extra_bundle_variants ?? []) as Array<Record<string, unknown>>;
+        const sorted = [...vars].sort((a, b) => (Number(a.sortOrder ?? a.sort_order ?? 0) - Number(b.sortOrder ?? b.sort_order ?? 0)));
+        return {
+          id: String(b.id),
+          name: String(b.name ?? ""),
+          description: String(b.description ?? ""),
+          longDescription: String(b.longDescription ?? b.long_description ?? ""),
+          image: (b.imageUrl ?? b.image_url ?? null) as string | null,
+          priceNetto: Number(b.priceNetto ?? b.price_netto ?? 0),
+          vatRate: Number(b.vatRate ?? b.vat_rate ?? 23),
+          priceBrutto: Number(b.priceBrutto ?? b.price_brutto ?? 0),
+          basePrice: Number(b.basePrice ?? b.base_price ?? 0),
+          minQuantity: Number(b.minQuantity ?? b.min_quantity ?? 1),
+          icon: String(b.icon ?? "✨"),
+          category: String(b.category ?? "dodatki"),
+          extrasCategoryId: (b.extrasCategoryId ?? b.extras_category_id ?? null) as string | null,
+          variants: sorted.map((v) => ({
+            id: String(v.id),
+            name: String(v.name ?? ""),
+            description: String(v.description ?? ""),
+            price: Number(v.price ?? 0),
+            priceOnSite: v.priceOnSite ?? v.price_on_site != null ? Number(v.priceOnSite ?? v.price_on_site) : null,
+            contents: (v.contents as string[]) ?? [],
+            sortOrder: Number(v.sortOrder ?? v.sort_order ?? 0),
+            extraId: (v.extraId ?? v.extra_id ?? null) as string | null,
+          })),
+        };
+      }));
     } catch (err) {
       console.error("loadAll", err);
     }
@@ -1354,6 +1689,9 @@ const SettingsDishesView = () => {
           <TabsTrigger value="extras" className="gap-1.5">
             <Sparkles className="w-3.5 h-3.5" />Dodatki
           </TabsTrigger>
+          <TabsTrigger value="extra-bundles" className="gap-1.5">
+            <Layers className="w-3.5 h-3.5" />Pakiety dodatków
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="ingredients">
@@ -1370,6 +1708,9 @@ const SettingsDishesView = () => {
         </TabsContent>
         <TabsContent value="extras">
           <ExtrasTabComponent extras={extras} extrasCategories={extrasCategories} reload={loadAll} />
+        </TabsContent>
+        <TabsContent value="extra-bundles">
+          <ExtraBundlesTab extraBundles={extraBundles} extras={extras} extrasCategories={extrasCategories} reload={loadAll} />
         </TabsContent>
       </Tabs>
     </div>

@@ -84,6 +84,7 @@ export function useAppData() {
     extraItems: extrasQuery.data?.extraItems ?? [],
     packagingOptions: extrasQuery.data?.packagingOptions ?? [],
     waiterServiceOptions: extrasQuery.data?.waiterServiceOptions ?? [],
+    extraBundles: extrasQuery.data?.extraBundles ?? [],
     paymentMethods: paymentMethodsQuery.data ?? [],
     blockedDates: blockedDatesQuery.data ?? [],
     deliveryConfig: deliveryConfigQuery.data ?? defaultDeliveryConfig,
