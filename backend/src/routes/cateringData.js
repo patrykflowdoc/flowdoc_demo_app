@@ -38,6 +38,16 @@ router.get("/event-category-mappings", async (_req, res) => {
   );
 });
 
+/** GET /api/event-extras-category-mappings */
+router.get("/event-extras-category-mappings", async (_req, res) => {
+  const rows = await prisma.eventExtrasCategoryMapping.findMany({
+    select: { eventTypeId: true, extrasCategoryId: true },
+  });
+  res.json(
+    rows.map((r) => ({ eventTypeId: r.eventTypeId, extrasCategoryId: r.extrasCategoryId }))
+  );
+});
+
 /** GET /api/products - dishes, bundles+variants, configurable_sets+groups+options */
 router.get("/products", async (_req, res) => {
   const [dishes, bundles, sets] = await Promise.all([

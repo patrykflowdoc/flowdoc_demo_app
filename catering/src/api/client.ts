@@ -6,6 +6,7 @@
 import { z } from "zod";
 import { ProductSchema } from "@/lib/schemas/product";
 import type { Product } from "@/data/products";
+import { AdminOrderSchema, AdminOrdersSchema, type AdminOrder } from "@/lib/schemas/orders";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
@@ -113,6 +114,12 @@ export async function getEventCategoryMappings(): Promise<{ event_type_id: strin
   return request("/api/event-category-mappings");
 }
 
+export type EventExtrasCategoryMapping = { eventTypeId: string; extrasCategoryId: string };
+
+export async function getEventExtrasCategoryMappings(): Promise<EventExtrasCategoryMapping[]> {
+  return request("/api/event-extras-category-mappings");
+}
+
 export async function getProducts(): Promise<Product[]> {
   const data = await request<unknown[]>("/api/products");
   return z.array(ProductSchema).parse(data);
@@ -187,6 +194,16 @@ export interface SubmitOrderPayload {
     total: number;
     unit?: string;
     itemType?: string;
+    foodCostPerUnit?: number;
+    dishId?: string;
+    subItems?: Array<{
+      name: string;
+      quantity: number;
+      unit?: string;
+      foodCostPerUnit?: number;
+      pricePerUnit?: number;
+      dishId?: string;
+    }>;
   }>;
   submissionType?: "order" | "offer";
 }
@@ -245,12 +262,14 @@ export async function deleteClient(id: string): Promise<void> {
   return request(`/api/admin/clients/${id}`, { method: "DELETE" });
 }
 
-export async function getAdminOrders(): Promise<unknown[]> {
-  return request("/api/admin/orders");
+export async function getAdminOrders(): Promise<AdminOrder[]> {
+  const data = await request<unknown[]>("/api/admin/orders");
+  return AdminOrdersSchema.parse(data);
 }
 
-export async function getAdminOrder(id: string): Promise<unknown> {
-  return request(`/api/admin/orders/${id}`);
+export async function getAdminOrder(id: string): Promise<AdminOrder> {
+  const data = await request<unknown>(`/api/admin/orders/${id}`);
+  return AdminOrderSchema.parse(data);
 }
 
 export async function updateAdminOrder(id: string, body: Record<string, unknown>): Promise<unknown> {
@@ -314,13 +333,26 @@ export async function getAdminEventCategoryMappings(): Promise<Array<{ id: strin
   return request("/api/admin/event-category-mappings");
 }
 
+export async function getAdminEventExtrasCategoryMappings(): Promise<Array<{ id: string; eventTypeId: string; extrasCategoryId: string }>> {
+  return request("/api/admin/event-extras-category-mappings");
+}
+
 export async function createEventCategoryMapping(body: { event_type_id: string; category_id: string }): Promise<unknown> {
   return request("/api/admin/event-category-mappings", { method: "POST", body });
+}
+
+export async function createEventExtrasCategoryMapping(body: { eventTypeId: string; extrasCategoryId: string }): Promise<unknown> {
+  return request("/api/admin/event-extras-category-mappings", { method: "POST", body });
 }
 
 export async function deleteEventCategoryMapping(params: { event_type_id: string; category_id: string }): Promise<void> {
   const q = new URLSearchParams(params);
   return request(`/api/admin/event-category-mappings?${q}`, { method: "DELETE" });
+}
+
+export async function deleteEventExtrasCategoryMapping(params: { eventTypeId: string; extrasCategoryId: string }): Promise<void> {
+  const q = new URLSearchParams(params);
+  return request(`/api/admin/event-extras-category-mappings?${q}`, { method: "DELETE" });
 }
 
 export async function getAdminExtrasCategories(): Promise<unknown[]> {

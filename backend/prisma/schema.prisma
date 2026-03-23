@@ -61,6 +61,7 @@ model EventType {
   updatedAt DateTime @updatedAt
 
   eventCategoryMappings EventCategoryMapping[]
+  eventExtrasCategoryMappings EventExtrasCategoryMapping[]
 
   @@map("event_types")
 }
@@ -91,6 +92,20 @@ model EventCategoryMapping {
   @@map("event_category_mappings")
 }
 
+model EventExtrasCategoryMapping {
+  id               String @id @default(uuid())
+  eventTypeId      String @map("event_type_id")
+  extrasCategoryId String @map("extras_category_id")
+
+  eventType      EventType      @relation(fields: [eventTypeId], references: [id], onDelete: Cascade)
+  extrasCategory ExtrasCategory @relation(fields: [extrasCategoryId], references: [id], onDelete: Cascade)
+
+  @@unique([eventTypeId, extrasCategoryId])
+  @@index([eventTypeId])
+  @@index([extrasCategoryId])
+  @@map("event_extras_category_mappings")
+}
+
 // ============== Extras categories ==============
 model ExtrasCategory {
   id          String   @id @default(uuid())
@@ -105,6 +120,7 @@ model ExtrasCategory {
 
   extras       Extra[]
   extraBundles ExtraBundle[]
+  eventExtrasCategoryMappings EventExtrasCategoryMapping[]
 
   @@map("extras_categories")
 }
@@ -135,6 +151,8 @@ model Dish {
   dishIngredients       DishIngredient[]
   bundleVariants        BundleVariant[]
   configGroupOptions    ConfigGroupOption[]
+  orderItems            OrderItem[]
+  orderItemSubItems     OrderItemSubItem[]
 
   @@map("dishes")
 }
@@ -154,6 +172,7 @@ model Bundle {
   minQuantity     Int      @default(1)
   icon            String   @default("🍽️")
   dietaryTags     String[] @default([])
+  conventer       Float?   @default(1)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -208,6 +227,7 @@ model ConfigGroup {
   minSelections Int     @default(1)
   maxSelections Int     @default(3)
   sortOrder     Int     @default(0)
+  conventer     Float?  @default(1)
 
   set     ConfigurableSet    @relation(fields: [setId], references: [id], onDelete: Cascade)
   options ConfigGroupOption[]
@@ -223,6 +243,7 @@ model ConfigGroupOption {
   allergens   String[] @default([])
   dietaryTags String[] @default([])
   sortOrder   Int      @default(0)
+  conventer   Float?   @default(1)
 
   group ConfigGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
   dish  Dish?       @relation(fields: [dishId], references: [id])
@@ -392,6 +413,7 @@ model Order {
   contactApartment String?
   deliveryZoneId    String?
   deliveryCost     Decimal   @default(0)
+  discount         Decimal   @default(0)
   amount           Decimal   @default(0)
   status           String    @default("Nowe")
   paymentMethod    String?
@@ -418,9 +440,11 @@ model OrderItem {
   itemType        String   @default("simple")
   foodCostPerUnit Decimal?
   sortOrder       Int      @default(0)
+  dishId          String?
 
   order     Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
   subItems  OrderItemSubItem[]
+  dish      Dish?     @relation(fields: [dishId], references: [id])
 
   @@map("order_items")
 }
@@ -432,8 +456,11 @@ model OrderItemSubItem {
   quantity        Decimal @default(0)
   unit            String  @default("szt.")
   foodCostPerUnit Decimal?
+  pricePerUnit    Float? @default(0)
+  dishId          String?
 
   orderItem OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  dish      Dish?     @relation(fields: [dishId], references: [id])
 
   @@map("order_item_sub_items")
 }

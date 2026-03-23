@@ -70,18 +70,36 @@ router.post("/", async (req, res) => {
     });
 
     if (orderItems.length > 0) {
-      await prisma.orderItem.createMany({
-        data: orderItems.map((item, idx) => ({
-          orderId: created.id,
-          name: String(item.name),
-          quantity: Number(item.quantity) || 1,
-          unit: item.unit ?? "szt.",
-          pricePerUnit: Number(item.pricePerUnit) ?? 0,
-          total: Number(item.total) ?? 0,
-          itemType: item.itemType ?? "simple",
-          sortOrder: idx,
-        })),
-      });
+      for (let idx = 0; idx < orderItems.length; idx += 1) {
+        const item = orderItems[idx];
+        const createdItem = await prisma.orderItem.create({
+          data: {
+            orderId: created.id,
+            name: String(item.name),
+            quantity: Number(item.quantity),
+            unit: item.unit,
+            pricePerUnit: Number(item.pricePerUnit),
+            total: Number(item.total),
+            itemType: item.itemType,
+            foodCostPerUnit:
+              item.foodCostPerUnit != null ? Number(item.foodCostPerUnit) : 0,
+            sortOrder: idx,
+          },
+        });
+
+        if (Array.isArray(item.subItems) && item.subItems.length > 0) {
+          await prisma.orderItemSubItem.createMany({
+            data: item.subItems.map((sub) => ({
+              orderItemId: createdItem.id,
+              name: String(sub.name),
+              quantity: Number(sub.quantity),
+              unit: sub.unit,
+              foodCostPerUnit: Number(sub.foodCostPerUnit),
+              pricePerUnit: Number(sub.pricePerUnit),
+            })),
+          });
+        }
+      }
     }
 
     const emailVariables = {
@@ -97,13 +115,7 @@ router.post("/", async (req, res) => {
       guestCount: order.guestCount ?? null,
       paymentMethod: order.paymentMethod ?? "",
       notes: order.notes ?? "",
-      orderItems: orderItems.map((item) => ({
-        name: item.name,
-        quantity: Number(item.quantity) || 1,
-        unit: item.unit ?? "szt.",
-        pricePerUnit: item.pricePerUnit,
-        total: item.total,
-      })),
+      orderItems: orderItems,
       totalPrice,
     };
 

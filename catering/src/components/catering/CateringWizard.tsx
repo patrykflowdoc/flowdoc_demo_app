@@ -1,4 +1,4 @@
-import { useMemo, useCallback } from "react";
+import { useMemo, useCallback, useEffect } from "react";
 import { toast } from "@/components/ui/sonner";
 import { useCateringOrder } from "@/hooks/useCateringOrder";
 import { useAppData } from "@/hooks/useAppData";
@@ -27,6 +27,7 @@ export function CateringWizard() {
     blockedDates,
     deliveryConfig,
     eventCategoryMappings: eventCategoryMappingsRaw,
+    eventExtrasCategoryMappings: eventExtrasCategoryMappingsRaw,
     orderConfig,
   } = useAppData();
 
@@ -35,6 +36,10 @@ export function CateringWizard() {
   const eventTypes = (eventTypesRaw ?? []) as { id: string; name: string }[];
   const extrasCategories = (extrasCategoriesRaw ?? []) as ExtrasCategory[];
   const eventCategoryMappings = (eventCategoryMappingsRaw ?? []) as { event_type_id: string; category_id: string }[];
+  const eventExtrasCategoryMappings = (eventExtrasCategoryMappingsRaw ?? []) as {
+    eventTypeId: string;
+    extrasCategoryId: string;
+  }[];
   const extraItemsTyped = (extraItems ?? []) as ExtraItem[];
   const packagingOptionsTyped = (packagingOptions ?? []) as PackagingOption[];
   const waiterServiceOptionsTyped = (waiterServiceOptions ?? []) as WaiterServiceOption[];
@@ -80,6 +85,86 @@ export function CateringWizard() {
     return products.filter((p) => visibleCategoryIds.has(p.category));
   }, [filteredCategories, products]);
 
+  // Filter extras categories based on selected event type mappings
+  const filteredExtrasCategories = useMemo(() => {
+    if (!order.eventType) return [];
+    const mappedExtrasCategoryIds = eventExtrasCategoryMappings
+      .filter((m) => m.eventTypeId === order.eventType)
+      .map((m) => m.extrasCategoryId);
+    return extrasCategories.filter((c) => mappedExtrasCategoryIds.includes(c.id));
+  }, [order.eventType, eventExtrasCategoryMappings, extrasCategories]);
+
+  const allowedExtrasCategoryIds = useMemo(
+    () => new Set(filteredExtrasCategories.map((c) => c.id)),
+    [filteredExtrasCategories]
+  );
+
+  useEffect(() => {
+    const allowedExtraIds = new Set(
+      extraItemsTyped
+        .filter((item) => item.extrasCategoryId && allowedExtrasCategoryIds.has(item.extrasCategoryId))
+        .map((item) => item.id)
+    );
+    const allowedBundleIds = new Set(
+      extraBundlesTyped
+        .filter((bundle) => bundle.extrasCategoryId && allowedExtrasCategoryIds.has(bundle.extrasCategoryId))
+        .map((bundle) => bundle.id)
+    );
+    const allowedPackagingIds = new Set(
+      packagingOptionsTyped
+        .filter((item) => item.extrasCategoryId && allowedExtrasCategoryIds.has(item.extrasCategoryId))
+        .map((item) => item.id)
+    );
+    const allowedWaiterIds = new Set(
+      waiterServiceOptionsTyped
+        .filter((item) => item.extrasCategoryId && allowedExtrasCategoryIds.has(item.extrasCategoryId))
+        .map((item) => item.id)
+    );
+
+    const sanitizedSelectedExtras = Object.fromEntries(
+      Object.entries(order.selectedExtras).filter(([id, qty]) => qty > 0 && allowedExtraIds.has(id))
+    );
+    const sanitizedSelectedExpandableExtras = Object.fromEntries(
+      Object.entries(order.selectedExpandableExtras).filter(([bundleId, variants]) => {
+        if (!allowedBundleIds.has(bundleId)) return false;
+        return Object.values(variants ?? {}).some((qty) => qty > 0);
+      })
+    );
+    const sanitizedSelectedPackaging =
+      order.selectedPackaging && allowedPackagingIds.has(order.selectedPackaging) ? order.selectedPackaging : null;
+    const sanitizedSelectedWaiterService =
+      order.selectedWaiterService && allowedWaiterIds.has(order.selectedWaiterService)
+        ? order.selectedWaiterService
+        : null;
+
+    const selectedExtrasChanged =
+      JSON.stringify(sanitizedSelectedExtras) !== JSON.stringify(order.selectedExtras);
+    const selectedExpandableChanged =
+      JSON.stringify(sanitizedSelectedExpandableExtras) !== JSON.stringify(order.selectedExpandableExtras);
+    const selectedPackagingChanged = sanitizedSelectedPackaging !== order.selectedPackaging;
+    const selectedWaiterChanged = sanitizedSelectedWaiterService !== order.selectedWaiterService;
+
+    if (selectedExtrasChanged || selectedExpandableChanged || selectedPackagingChanged || selectedWaiterChanged) {
+      updateOrder({
+        selectedExtras: sanitizedSelectedExtras,
+        selectedExpandableExtras: sanitizedSelectedExpandableExtras,
+        selectedPackaging: sanitizedSelectedPackaging,
+        selectedWaiterService: sanitizedSelectedWaiterService,
+      });
+    }
+  }, [
+    order.selectedExtras,
+    order.selectedExpandableExtras,
+    order.selectedPackaging,
+    order.selectedWaiterService,
+    extraItemsTyped,
+    extraBundlesTyped,
+    packagingOptionsTyped,
+    waiterServiceOptionsTyped,
+    allowedExtrasCategoryIds,
+    updateOrder,
+  ]);
+
   const handleSubmit = async (submissionType: SubmissionType = "offer") => {
     return submitOrder(
       order,
@@ -91,6 +176,7 @@ export function CateringWizard() {
       extraBundlesTyped,
       eventTypes,
       submissionType,
+      allowedExtrasCategoryIds,
     );
   };
 
@@ -103,20 +189,24 @@ export function CateringWizard() {
     }
     if (currentStep === 2) {
       // Check required extras categories
-      const requiredCats = extrasCategories.filter(c => c.required);
+      const requiredCats = filteredExtrasCategories.filter(c => c.required);
       for (const cat of requiredCats) {
         const catExtras = extraItemsTyped.filter((e) => e.extrasCategoryId === cat.id);
         const catPkgs = packagingOptionsTyped.filter((p) => p.extrasCategoryId === cat.id);
         const catWaiters = waiterServiceOptionsTyped.filter((w) => w.extrasCategoryId === cat.id);
+        const catBundles = extraBundlesTyped.filter((b) => b.extrasCategoryId === cat.id);
         
         const hasExtraSelected = catExtras.some((e) => (order.selectedExtras[e.id] || 0) > 0);
         const hasPkgSelected = catPkgs.some((p) => order.selectedPackaging === p.id);
+        const hasBundleSelected = catBundles.some((b) =>
+          Object.values(order.selectedExpandableExtras[b.id] ?? {}).some((qty) => qty > 0)
+        );
         
         // If this category has waiter options, "Bez obsługi" (null) is always valid
         // so any waiter category is always satisfied
         const isWaiterCategory = catWaiters.length > 0;
         
-        if (!hasExtraSelected && !hasPkgSelected && !isWaiterCategory) {
+        if (!hasExtraSelected && !hasPkgSelected && !hasBundleSelected && !isWaiterCategory) {
           errors.push(`Uzupełnij kategorię „${cat.name}"`);
         }
       }
@@ -130,7 +220,15 @@ export function CateringWizard() {
       if (!order.contactBuildingNumber) errors.push("Podaj numer budynku");
     }
     return errors;
-  }, [currentStep, order, extrasCategories, extraItemsTyped, packagingOptionsTyped, waiterServiceOptionsTyped]);
+  }, [
+    currentStep,
+    order,
+    filteredExtrasCategories,
+    extraItemsTyped,
+    packagingOptionsTyped,
+    waiterServiceOptionsTyped,
+    extraBundlesTyped,
+  ]);
 
   const handleNext = () => {
     const errors = getValidationErrors();
@@ -201,7 +299,7 @@ export function CateringWizard() {
       case 2:
         return (
           <ExtrasStep
-            extrasCategories={extrasCategories}
+            extrasCategories={filteredExtrasCategories}
             selectedExtras={order.selectedExtras}
             selectedExpandableExtras={order.selectedExpandableExtras}
             selectedPackaging={order.selectedPackaging}

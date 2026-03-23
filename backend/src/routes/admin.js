@@ -45,6 +45,11 @@ const configurableSetPatchSchema = z
   })
   .partial();
 
+const eventExtrasCategoryMappingSchema = z.object({
+  eventTypeId: z.string().min(1),
+  extrasCategoryId: z.string().min(1),
+});
+
 function pickWithSnakeFallback(obj, keys) {
   const out = {};
   for (const key of keys) {
@@ -232,24 +237,6 @@ router.patch("/orders/:id", requireCsrf, async (req, res) => {
   const id = req.params.id;
   const b = req.body ?? {};
   const data = {};
-  if (b.clientId !== undefined) data.clientId = b.clientId || null;
-  if (b.status !== undefined) data.status = String(b.status);
-  if (b.clientName !== undefined) data.clientName = String(b.clientName);
-  if (b.clientEmail !== undefined) data.clientEmail = b.clientEmail;
-  if (b.clientPhone !== undefined) data.clientPhone = b.clientPhone;
-  if (b.eventDate !== undefined) data.eventDate = b.eventDate ? new Date(b.eventDate) : null;
-  if (b.eventType !== undefined) data.eventType = b.eventType;
-  if (b.guestCount !== undefined) data.guestCount = b.guestCount;
-  if (b.deliveryAddress !== undefined) data.deliveryAddress = b.deliveryAddress;
-  if (b.contactCity !== undefined) data.contactCity = b.contactCity;
-  if (b.contactStreet !== undefined) data.contactStreet = b.contactStreet;
-  if (b.contactBuilding !== undefined) data.contactBuilding = b.contactBuilding;
-  if (b.contactApartment !== undefined) data.contactApartment = b.contactApartment;
-  if (b.deliveryZoneId !== undefined) data.deliveryZoneId = b.deliveryZoneId || null;
-  if (b.deliveryCost !== undefined) data.deliveryCost = Number(b.deliveryCost);
-  if (b.amount !== undefined) data.amount = Number(b.amount);
-  if (b.paymentMethod !== undefined) data.paymentMethod = b.paymentMethod;
-  if (b.notes !== undefined) data.notes = b.notes;
 
   if (Object.keys(data).length > 0) {
     await prisma.order.update({ where: { id }, data });
@@ -264,10 +251,14 @@ router.patch("/orders/:id", requireCsrf, async (req, res) => {
           orderId: id,
           name: String(it.name),
           quantity: Number(it.quantity) || 1,
-          unit: it.unit ?? "szt.",
-          pricePerUnit: Number(it.pricePerUnit ?? it.price_per_unit) ?? 0,
+          unit: it.unit,
+          pricePerUnit: Number(it.pricePerUnit),
           total: Number(it.total) ?? 0,
-          itemType: it.itemType ?? it.item_type ?? "simple",
+          itemType: it.itemType,
+          foodCostPerUnit:
+            it.foodCostPerUnit != null
+              ? Number(it.foodCostPerUnit)
+              : 0,
           sortOrder: i,
         },
       });
@@ -276,8 +267,12 @@ router.patch("/orders/:id", requireCsrf, async (req, res) => {
           data: it.subItems.map((s) => ({
             orderItemId: created.id,
             name: String(s.name),
-            quantity: Number(s.quantity) ?? 0,
-            unit: s.unit ?? "szt.",
+            quantity: Number(s.quantity),
+            unit: s.unit,
+            foodCostPerUnit:
+              s.foodCostPerUnit != null
+                ? Number(s.foodCostPerUnit)
+                : 0,
           })),
         });
       }
@@ -486,6 +481,50 @@ router.delete("/event-category-mappings", requireCsrf, async (req, res) => {
   const categoryId = req.query.category_id;
   await prisma.eventCategoryMapping.deleteMany({
     where: { eventTypeId, categoryId },
+  });
+  res.status(204).send();
+});
+
+// ─── Event extras category mappings ───────────────────────────────────
+/** GET /api/admin/event-extras-category-mappings */
+router.get("/event-extras-category-mappings", async (_req, res) => {
+  const rows = await prisma.eventExtrasCategoryMapping.findMany();
+  res.json(
+    rows.map((r) => ({
+      id: r.id,
+      eventTypeId: r.eventTypeId,
+      extrasCategoryId: r.extrasCategoryId,
+    }))
+  );
+});
+
+/** POST /api/admin/event-extras-category-mappings */
+router.post("/event-extras-category-mappings", requireCsrf, async (req, res) => {
+  const b = req.body ?? {};
+  const parsed = eventExtrasCategoryMappingSchema.safeParse({
+    eventTypeId: b.eventTypeId,
+    extrasCategoryId: b.extrasCategoryId,
+  });
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Validation failed", details: parsed.error.flatten() });
+  }
+  const created = await prisma.eventExtrasCategoryMapping.create({
+    data: parsed.data,
+  });
+  res.status(201).json(created);
+});
+
+/** DELETE /api/admin/event-extras-category-mappings - query: eventTypeId, extrasCategoryId */
+router.delete("/event-extras-category-mappings", requireCsrf, async (req, res) => {
+  const parsed = eventExtrasCategoryMappingSchema.safeParse({
+    eventTypeId: req.query.eventTypeId,
+    extrasCategoryId: req.query.extrasCategoryId,
+  });
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Validation failed", details: parsed.error.flatten() });
+  }
+  await prisma.eventExtrasCategoryMapping.deleteMany({
+    where: parsed.data,
   });
   res.status(204).send();
 });
@@ -1054,38 +1093,40 @@ router.get("/configurable-sets", async (_req, res) => {
 router.post("/configurable-sets", requireCsrf, async (req, res) => {
   const b = req.body ?? {};
   const setPayload = {
-    name: b.name ?? "",
+    name: b.name,
     description: b.description ?? "",
     longDescription: b.longDescription ?? "",
     imageUrl: b.imageUrl ?? null,
     categorySlug: b.categorySlug ?? null,
-    pricePerPerson: Number(b.pricePerPerson ?? b.price_per_person ?? 0),
-    pricePerPersonOnSite: b.pricePerPersonOnSite != null ? Number(b.pricePerPersonOnSite) : null,
-    minPersons: Number(b.minPersons ?? b.min_persons ?? 10),
+    pricePerPerson: Number(b.pricePerPerson),
+    pricePerPersonOnSite: b.pricePerPersonOnSite == null ? null : Number(b.pricePerPersonOnSite),
+    minPersons: Number(b.minPersons ?? 10),
     icon: b.icon ?? "🍽️",
-    dietaryTags: Array.isArray(b.dietary_tags ?? b.dietaryTags) ? (b.dietary_tags ?? b.dietaryTags) : [],
+    dietaryTags: b.dietaryTags ?? [],
   };
   const created = await prisma.configurableSet.create({ data: setPayload });
-  if (Array.isArray(b.config_groups) && b.config_groups.length > 0) {
-    for (const g of b.config_groups) {
+  if (Array.isArray(b.configGroups) && b.configGroups.length > 0) {
+    for (const g of b.configGroups) {
       const group = await prisma.configGroup.create({
         data: {
           setId: created.id,
           name: g.name ?? "",
-          minSelections: Number(g.min_selections ?? g.minSelections ?? 1),
-          maxSelections: Number(g.max_selections ?? g.maxSelections ?? 3),
-          sortOrder: Number(g.sort_order ?? g.sortOrder ?? 0),
+          minSelections: Number(g.minSelections ?? 1),
+          maxSelections: Number(g.maxSelections ?? 3),
+          sortOrder: Number(g.sortOrder ?? 0),
+          conventer: Number(g.conventer ?? 1),
         },
       });
-      if (Array.isArray(g.config_group_options) && g.config_group_options.length > 0) {
+      if (Array.isArray(g.configGroupOptions) && g.configGroupOptions.length > 0) {
         await prisma.configGroupOption.createMany({
-          data: g.config_group_options.map((o, i) => ({
+          data: g.configGroupOptions.map((o, i) => ({
             groupId: group.id,
             name: o.name ?? "",
-            dishId: o.dish_id ?? o.dishId ?? null,
+            dishId: o.dishId ?? null,
             allergens: Array.isArray(o.allergens) ? o.allergens : [],
-            dietaryTags: Array.isArray(o.dietary_tags ?? o.dietaryTags) ? (o.dietary_tags ?? o.dietaryTags) : [],
-            sortOrder: o.sort_order ?? o.sortOrder ?? i,
+            dietaryTags: Array.isArray(o.dietaryTags) ? (o.dietaryTags) : [],
+            sortOrder: o.sortOrder ?? i,
+            conventer: Number(o.conventer ?? 1),
           })),
         });
       }
@@ -1112,32 +1153,34 @@ router.patch("/configurable-sets/:id", requireCsrf, async (req, res) => {
   }
   const data = Object.fromEntries(Object.entries(parsed.data).filter(([, v]) => v !== undefined));
   if (Object.keys(data).length > 0) await prisma.configurableSet.update({ where: { id }, data });
-  if (Array.isArray(b.config_groups)) {
+  if (Array.isArray(b.configGroups)) {
     const existing = await prisma.configGroup.findMany({ where: { setId: id }, select: { id: true } });
     const groupIds = existing.map((g) => g.id);
     if (groupIds.length > 0) {
       await prisma.configGroupOption.deleteMany({ where: { groupId: { in: groupIds } } });
       await prisma.configGroup.deleteMany({ where: { setId: id } });
     }
-    for (const g of b.config_groups) {
+    for (const g of b.configGroups) {
       const group = await prisma.configGroup.create({
         data: {
           setId: id,
           name: g.name ?? "",
-          minSelections: Number(g.min_selections ?? g.minSelections ?? 1),
-          maxSelections: Number(g.max_selections ?? g.maxSelections ?? 3),
-          sortOrder: Number(g.sort_order ?? g.sortOrder ?? 0),
+          minSelections: Number(g.minSelections ?? 1),
+          maxSelections: Number(g.maxSelections ?? 3),
+          sortOrder: Number(g.sortOrder ?? 0),
+          conventer: Number(g.conventer ?? 1),
         },
       });
-      if (Array.isArray(g.config_group_options) && g.config_group_options.length > 0) {
+      if (Array.isArray(g.configGroupOptions) && g.configGroupOptions.length > 0) {
         await prisma.configGroupOption.createMany({
-          data: g.config_group_options.map((o, i) => ({
+          data: g.configGroupOptions.map((o, i) => ({
             groupId: group.id,
             name: o.name ?? "",
-            dishId: o.dish_id ?? o.dishId ?? null,
+            dishId: o.dishId ?? null,
             allergens: Array.isArray(o.allergens) ? o.allergens : [],
-            dietaryTags: Array.isArray(o.dietary_tags ?? o.dietaryTags) ? (o.dietary_tags ?? o.dietaryTags) : [],
-            sortOrder: o.sort_order ?? o.sortOrder ?? i,
+            dietaryTags: Array.isArray(o.dietaryTags) ? (o.dietaryTags) : [],
+            sortOrder: o.sortOrder ?? i,
+            conventer: Number(o.conventer ?? 1),
           })),
         });
       }

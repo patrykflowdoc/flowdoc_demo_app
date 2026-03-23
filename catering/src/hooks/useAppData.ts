@@ -19,6 +19,11 @@ export function useAppData() {
     queryFn: api.getEventCategoryMappings,
     staleTime,
   });
+  const eventExtrasCategoryMappingsQuery = useQuery({
+    queryKey: ["eventExtrasCategoryMappings"],
+    queryFn: api.getEventExtrasCategoryMappings,
+    staleTime,
+  });
   const productsQuery = useQuery({
     queryKey: ["products"],
     queryFn: api.getProducts,
@@ -65,6 +70,7 @@ export function useAppData() {
     blockedDatesQuery.isLoading ||
     deliveryConfigQuery.isLoading ||
     eventCategoryMappingsQuery.isLoading ||
+    eventExtrasCategoryMappingsQuery.isLoading ||
     orderConfigQuery.isLoading;
 
   const defaultDeliveryConfig = {
@@ -89,6 +95,7 @@ export function useAppData() {
     blockedDates: blockedDatesQuery.data ?? [],
     deliveryConfig: deliveryConfigQuery.data ?? defaultDeliveryConfig,
     eventCategoryMappings: eventCategoryMappingsQuery.data ?? [],
+    eventExtrasCategoryMappings: eventExtrasCategoryMappingsQuery.data ?? [],
     orderConfig: orderConfigQuery.data ?? { minOrderValue: 0, minLeadDays: 0 },
   };
 }

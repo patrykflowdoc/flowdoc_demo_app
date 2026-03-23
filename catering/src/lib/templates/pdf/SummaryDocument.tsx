@@ -1,0 +1,233 @@
+import { Document, Page, Text, View } from "@react-pdf/renderer";
+import { effectiveLineItemType, isAddonLineItem, isExpandableLineItem, isFoodCostEligibleLineItem, splitPrimaryAndAddonItems } from "@/lib/orderLineItems";
+import type { PdfOrderDocumentData } from "@/types/orders";
+import { fmtPdfNum } from "./fmt";
+import { OfferItemsTableBlock, OfferPayRow, PdfDocHeader, SimpleMetaLines } from "./components";
+import { pdfStyles } from "./styles";
+import { groupOrdersByDate, parseDateForGrouping, type SummaryDocType } from "./summaryHelpers";
+
+export type { SummaryDocType };
+
+function OrderDetailPage({ order }: { order: PdfOrderDocumentData }) {
+  const { primary, addons } = splitPrimaryAndAddonItems(order.items);
+  const meta: string[] = [`Adres: ${order.deliveryAddress || "—"}`];
+  if (order.guestCount > 0) meta.push(`Gości: ${order.guestCount}`);
+  if (order.notes) meta.push(`Uwagi: ${order.notes}`);
+
+  return (
+    <Page size="A4" style={pdfStyles.page}>
+      <PdfDocHeader title={order.id} subtitle={`${order.client} | ${order.event || "Wydarzenie"} | ${order.date}`} />
+      <SimpleMetaLines lines={meta} />
+      <OfferItemsTableBlock sectionTitle="Produkty" items={primary} />
+      {addons.length > 0 ? (
+        <View style={pdfStyles.sectionGap}>
+          <OfferItemsTableBlock sectionTitle="Dodatki i usługi" items={addons} />
+        </View>
+      ) : null}
+      {order.deliveryCost > 0 ? (
+        <View style={{ marginTop: 8 }}>
+          <View style={pdfStyles.tableRow} wrap={false}>
+            <Text style={{ flex: 2.2, fontSize: 9 }}>Dostawa</Text>
+            <Text style={{ flex: 0.95, fontSize: 9, textAlign: "center" }}>1</Text>
+            <Text style={{ flex: 1, fontSize: 9, textAlign: "right" }}>{fmtPdfNum(order.deliveryCost)} zł</Text>
+            <Text style={{ flex: 1, fontSize: 9, textAlign: "right" }}>{fmtPdfNum(order.deliveryCost)} zł</Text>
+          </View>
+        </View>
+      ) : null}
+      <OfferPayRow amountLabel="SUMA:" amount={order.amount} />
+    </Page>
+  );
+}
+
+export function SummaryDocument({
+  orders,
+  docType,
+  dateRange,
+}: {
+  orders: PdfOrderDocumentData[];
+  docType: SummaryDocType;
+  dateRange?: string;
+}) {
+  const totalAmount = fmtPdfNum(orders.reduce((s, o) => s + o.amountNum, 0));
+  const subtitle = `${dateRange || ""} | ${orders.length} zamówień | Łączna kwota: ${totalAmount} zł`;
+  const grouped = groupOrdersByDate(orders);
+
+  if (docType === "zamowienia") {
+    return (
+      <Document>
+        <Page size="A4" style={pdfStyles.page} wrap>
+          <PdfDocHeader title="Lista zamówień" subtitle={subtitle} />
+          {Array.from(grouped.entries()).map(([date, dateOrders]) => {
+            const dayLabel = parseDateForGrouping(date);
+            const dayTotal = fmtPdfNum(dateOrders.reduce((s, o) => s + o.amountNum, 0));
+            return (
+              <View key={date} style={{ marginBottom: 14 }} wrap={false}>
+                <Text style={{ fontSize: 12, marginBottom: 4, fontWeight: "bold" }}>
+                  Data: {dayLabel} — {dateOrders.length} zam. / {dayTotal} zł
+                </Text>
+                <View style={pdfStyles.tableHead}>
+                  <Text style={[pdfStyles.tableHeadCell, { flex: 0.7 }]}>Nr</Text>
+                  <Text style={[pdfStyles.tableHeadCell, { flex: 1.1 }]}>Klient</Text>
+                  <Text style={[pdfStyles.tableHeadCell, { flex: 0.9 }]}>Wydarzenie</Text>
+                  <Text style={[pdfStyles.tableHeadCell, { flex: 0.75, textAlign: "right" }]}>Kwota</Text>
+                  <Text style={[pdfStyles.tableHeadCell, { flex: 0.45, textAlign: "center" }]}>Gości</Text>
+                  <Text style={[pdfStyles.tableHeadCell, { flex: 1.1 }]}>Adres</Text>
+                </View>
+                {dateOrders.map((o, i) => (
+                  <View key={`${o.id}-${i}`} style={pdfStyles.tableRow} wrap={false}>
+                    <Text style={{ flex: 0.7, fontSize: 8 }}>{o.id}</Text>
+                    <Text style={{ flex: 1.1, fontSize: 8 }}>{o.client}</Text>
+                    <Text style={{ flex: 0.9, fontSize: 8 }}>{o.event || "—"}</Text>
+                    <Text style={{ flex: 0.75, fontSize: 8, textAlign: "right" }}>{o.amount}</Text>
+                    <Text style={{ flex: 0.45, fontSize: 8, textAlign: "center" }}>
+                      {o.guestCount > 0 ? String(o.guestCount) : "—"}
+                    </Text>
+                    <Text style={{ flex: 1.1, fontSize: 8 }}>{o.deliveryAddress || "—"}</Text>
+                  </View>
+                ))}
+              </View>
+            );
+          })}
+        </Page>
+        {orders.map((order) => (
+          <OrderDetailPage key={order.id} order={order} />
+        ))}
+      </Document>
+    );
+  }
+
+  if (docType === "lista-dan") {
+    return (
+      <Document>
+        <Page size="A4" style={pdfStyles.page} wrap>
+          <PdfDocHeader title="Lista dań — podsumowanie" subtitle={subtitle} />
+          {Array.from(grouped.entries()).flatMap(([date, dateOrders]) => {
+            const dayLabel = parseDateForGrouping(date);
+            type DishEntry = { name: string; totalQty: number; unit: string; source: string };
+            const dishMap: Record<string, DishEntry> = {};
+            dateOrders.forEach((o) => {
+              o.items.forEach((item) => {
+                const t = effectiveLineItemType(item);
+                if (isAddonLineItem(t)) return;
+                if (isExpandableLineItem(t) && item.subItems) {
+                  item.subItems.forEach((sub) => {
+                    const key = `${sub.name}__dish`;
+                    if (!dishMap[key]) dishMap[key] = { name: sub.name, totalQty: 0, unit: sub.unit, source: item.name };
+                    dishMap[key].totalQty += sub.quantity;
+                  });
+                } else {
+                  const key = `${item.name}__dish`;
+                  if (!dishMap[key]) dishMap[key] = { name: item.name, totalQty: 0, unit: item.unit, source: "" };
+                  dishMap[key].totalQty += item.quantity;
+                }
+              });
+            });
+            const dishes = Object.values(dishMap).sort((a, b) => a.name.localeCompare(b.name, "pl"));
+            if (dishes.length === 0) return [];
+            const guestSum = dateOrders.reduce((s, o) => s + o.guestCount, 0);
+            return [
+              <View key={date} style={{ marginBottom: 14 }} wrap={false}>
+                <Text style={{ fontSize: 12, marginBottom: 4, fontWeight: "bold" }}>
+                  Data: {dayLabel} — {dateOrders.length} zam. / {guestSum} gości
+                </Text>
+                <View style={pdfStyles.tableHead}>
+                  <Text style={[pdfStyles.tableHeadCell, { flex: 1.6 }]}>Danie</Text>
+                  <Text style={[pdfStyles.tableHeadCell, { flex: 0.6, textAlign: "right" }]}>Ilość</Text>
+                  <Text style={[pdfStyles.tableHeadCell, { flex: 0.5 }]}>Jedn.</Text>
+                  <Text style={[pdfStyles.tableHeadCell, { flex: 1.1 }]}>Źródło</Text>
+                </View>
+                {dishes.map((d, i) => (
+                  <View key={i} style={pdfStyles.tableRow} wrap={false}>
+                    <Text style={{ flex: 1.6, fontSize: 9 }}>{d.name}</Text>
+                    <Text style={{ flex: 0.6, fontSize: 9, textAlign: "right" }}>{String(d.totalQty)}</Text>
+                    <Text style={{ flex: 0.5, fontSize: 9 }}>{d.unit}</Text>
+                    <Text style={{ flex: 1.1, fontSize: 9 }}>{d.source || "—"}</Text>
+                  </View>
+                ))}
+              </View>,
+            ];
+          })}
+        </Page>
+      </Document>
+    );
+  }
+
+  // food-cost
+  let grandFC = 0;
+  let grandRev = 0;
+  return (
+    <Document>
+      <Page size="A4" style={pdfStyles.page} wrap>
+        <PdfDocHeader title="Food cost — podsumowanie" subtitle={subtitle} />
+        {Array.from(grouped.entries()).flatMap(([date, dateOrders]) => {
+          const dayLabel = parseDateForGrouping(date);
+          const rows: {
+            orderId: string;
+            name: string;
+            qty: string;
+            fcPu: string;
+            fcTot: string;
+            rev: string;
+            margin: string;
+          }[] = [];
+          let dayFC = 0;
+          let dayRev = 0;
+          dateOrders.forEach((o) => {
+            o.items.forEach((item) => {
+              if (!isFoodCostEligibleLineItem(item)) return;
+              const fc = item.foodCostPerUnit!;
+              const totalFC = fc * item.quantity;
+              const margin = item.total > 0 ? ((item.total - totalFC) / item.total) * 100 : 0;
+              rows.push({
+                orderId: o.id,
+                name: item.name,
+                qty: `${item.quantity} ${item.unit}`,
+                fcPu: `${fmtPdfNum(fc)} zł`,
+                fcTot: `${fmtPdfNum(totalFC)} zł`,
+                rev: `${fmtPdfNum(item.total)} zł`,
+                margin: `${margin.toFixed(1)}%`,
+              });
+              dayFC += totalFC;
+              dayRev += item.total;
+            });
+          });
+          if (rows.length === 0) return [];
+          grandFC += dayFC;
+          grandRev += dayRev;
+          const dayMargin = dayRev > 0 ? ((dayRev - dayFC) / dayRev) * 100 : 0;
+          return [
+            <View key={date} style={{ marginBottom: 14 }} wrap={false}>
+              <Text style={{ fontSize: 12, marginBottom: 4, fontWeight: "bold" }}>
+                Data: {dayLabel} — FC: {fmtPdfNum(dayFC)} zł / Marża: {dayMargin.toFixed(1)}%
+              </Text>
+              <View style={pdfStyles.tableHead}>
+                <Text style={[pdfStyles.tableHeadCell, { flex: 0.55 }]}>Zam.</Text>
+                <Text style={[pdfStyles.tableHeadCell, { flex: 1 }]}>Produkt</Text>
+                <Text style={[pdfStyles.tableHeadCell, { flex: 0.75 }]}>Ilość</Text>
+                <Text style={[pdfStyles.tableHeadCell, { flex: 0.65, textAlign: "right" }]}>FC/j.</Text>
+                <Text style={[pdfStyles.tableHeadCell, { flex: 0.7, textAlign: "right" }]}>FC ∑</Text>
+                <Text style={[pdfStyles.tableHeadCell, { flex: 0.65, textAlign: "right" }]}>Prz.</Text>
+                <Text style={[pdfStyles.tableHeadCell, { flex: 0.45, textAlign: "right" }]}>Mar.</Text>
+              </View>
+              {rows.map((r, i) => (
+                <View key={i} style={pdfStyles.tableRow} wrap={false}>
+                  <Text style={{ flex: 0.55, fontSize: 7 }}>{r.orderId}</Text>
+                  <Text style={{ flex: 1, fontSize: 7 }}>{r.name}</Text>
+                  <Text style={{ flex: 0.75, fontSize: 7 }}>{r.qty}</Text>
+                  <Text style={{ flex: 0.65, fontSize: 7, textAlign: "right" }}>{r.fcPu}</Text>
+                  <Text style={{ flex: 0.7, fontSize: 7, textAlign: "right" }}>{r.fcTot}</Text>
+                  <Text style={{ flex: 0.65, fontSize: 7, textAlign: "right" }}>{r.rev}</Text>
+                  <Text style={{ flex: 0.45, fontSize: 7, textAlign: "right" }}>{r.margin}</Text>
+                </View>
+              ))}
+            </View>,
+          ];
+        })}
+        <Text style={{ fontSize: 11, marginTop: 12, fontWeight: "bold" }}>
+          SUMA: Food cost {fmtPdfNum(grandFC)} zł | Przychód {fmtPdfNum(grandRev)} zł | Marża{" "}
+          {grandRev > 0 ? (((grandRev - grandFC) / grandRev) * 100).toFixed(1) : "0.0"}%
+        </Text>
+      </Page>
+    </Document>
+  );
+}

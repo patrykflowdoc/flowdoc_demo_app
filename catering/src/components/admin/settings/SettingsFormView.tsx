@@ -32,6 +32,7 @@ interface EventType {
   name: string;
   icon: LucideIconName;
   allowedCategoryIds: string[];
+  allowedExtrasCategoryIds: string[];
 }
 
 const popularIcons: LucideIconName[] = [
@@ -100,16 +101,18 @@ const SettingsFormView = () => {
 
   useEffect(() => {
     const fetchData = async () => {
-      const [catsRes, evtsRes, mappingsRes, exCatsRes] = await Promise.all([
+      const [catsRes, evtsRes, mappingsRes, exCatsRes, exMappingsRes] = await Promise.all([
         api.getAdminProductCategories(),
         api.getAdminEventTypes(),
         api.getAdminEventCategoryMappings(),
         api.getAdminExtrasCategories(),
+        api.getAdminEventExtrasCategoryMappings(),
       ]);
       const cats = (Array.isArray(catsRes) ? catsRes : []) as Record<string, unknown>[];
       const evts = (Array.isArray(evtsRes) ? evtsRes : []) as Record<string, unknown>[];
       const mappings = (Array.isArray(mappingsRes) ? mappingsRes : []) as Record<string, unknown>[];
       const exCats = (Array.isArray(exCatsRes) ? exCatsRes : []) as Record<string, unknown>[];
+      const exMappings = (Array.isArray(exMappingsRes) ? exMappingsRes : []) as Record<string, unknown>[];
 
       setCategories(cats.map((c) => ({
         id: String(c.id), name: String(c.name ?? ""), description: String(c.description ?? ""),
@@ -129,10 +132,18 @@ const SettingsFormView = () => {
         if (!mappingsByEvent[eid]) mappingsByEvent[eid] = [];
         mappingsByEvent[eid].push(cid);
       });
+      const extrasMappingsByEvent: Record<string, string[]> = {};
+      exMappings.forEach((m) => {
+        const eid = String(m.eventTypeId);
+        const exid = String(m.extrasCategoryId);
+        if (!extrasMappingsByEvent[eid]) extrasMappingsByEvent[eid] = [];
+        extrasMappingsByEvent[eid].push(exid);
+      });
       setEvents(evts.map((e) => ({
         id: String(e.id), name: String(e.name ?? ""),
         icon: (e.icon as LucideIconName) || "CalendarDays",
         allowedCategoryIds: mappingsByEvent[String(e.id)] || [],
+        allowedExtrasCategoryIds: extrasMappingsByEvent[String(e.id)] || [],
       })));
       setLoading(false);
     };
@@ -246,6 +257,10 @@ const SettingsFormView = () => {
       return;
     }
     setExtrasCategories(extrasCategories.filter(c => c.id !== id));
+    setEvents(events.map((e) => ({
+      ...e,
+      allowedExtrasCategoryIds: e.allowedExtrasCategoryIds.filter((exid) => exid !== id),
+    })));
     toast.success("Usunięto kategorię dodatków");
   };
 
@@ -260,6 +275,33 @@ const SettingsFormView = () => {
       return;
     }
     setExtrasCategories(extrasCategories.map(c => c.id === id ? { ...c, isRequired: newVal } : c));
+  };
+
+  const toggleExtrasCategoryForEvent = async (eventId: string, extrasCategoryId: string) => {
+    const event = events.find((e) => e.id === eventId);
+    if (!event) return;
+
+    const has = event.allowedExtrasCategoryIds.includes(extrasCategoryId);
+
+    try {
+      if (has) {
+        await api.deleteEventExtrasCategoryMapping({ eventTypeId: eventId, extrasCategoryId });
+      } else {
+        await api.createEventExtrasCategoryMapping({ eventTypeId: eventId, extrasCategoryId });
+      }
+    } catch {
+      // ignore
+    }
+
+    setEvents(events.map((e) => {
+      if (e.id !== eventId) return e;
+      return {
+        ...e,
+        allowedExtrasCategoryIds: has
+          ? e.allowedExtrasCategoryIds.filter((cid) => cid !== extrasCategoryId)
+          : [...e.allowedExtrasCategoryIds, extrasCategoryId],
+      };
+    }));
   };
 
   if (loading) {
@@ -445,6 +487,52 @@ const SettingsFormView = () => {
                             <Checkbox
                               checked={isChecked}
                               onCheckedChange={() => toggleCategoryForEvent(event.id, cat.id)}
+                              className="w-3.5 h-3.5"
+                            />
+                            {cat.name}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Event -> extras category mappings */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Kategorie dodatkow dla rodzajow wydarzen</CardTitle>
+            <CardDescription>Okresl, ktore kategorie dodatkow sa widoczne dla danego typu wydarzenia</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {events.map((event) => {
+                const EventIcon = icons[event.icon];
+                return (
+                  <div key={event.id} className="p-4 rounded-lg border border-border">
+                    <div className="flex items-center gap-3 mb-3">
+                      <EventIcon className="w-4 h-4 text-primary" />
+                      <span className="text-sm font-medium">{event.name}</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {extrasCategories.map((cat) => {
+                        const isChecked = event.allowedExtrasCategoryIds.includes(cat.id);
+                        return (
+                          <label
+                            key={cat.id}
+                            className={cn(
+                              "flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-colors text-xs font-medium",
+                              isChecked
+                                ? "bg-accent border-primary/30 text-accent-foreground"
+                                : "bg-muted/20 border-border text-muted-foreground hover:bg-muted/40"
+                            )}
+                          >
+                            <Checkbox
+                              checked={isChecked}
+                              onCheckedChange={() => toggleExtrasCategoryForEvent(event.id, cat.id)}
                               className="w-3.5 h-3.5"
                             />
                             {cat.name}

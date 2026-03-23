@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -63,6 +63,16 @@ export function ExtrasStep({
 
   // Set first category as active when categories load
   const effectiveActiveCategory = activeCategory ?? (extrasCategories?.length > 0 ? extrasCategories[0].id : null);
+
+  useEffect(() => {
+    if (!extrasCategories.length) {
+      if (activeCategory !== null) setActiveCategory(null);
+      return;
+    }
+    if (activeCategory && !extrasCategories.some((c) => c.id === activeCategory)) {
+      setActiveCategory(extrasCategories[0].id);
+    }
+  }, [extrasCategories, activeCategory]);
 
   // Group extras/packaging/waiter by their extras_category_id
   const extrasByCategory = useMemo(() => {

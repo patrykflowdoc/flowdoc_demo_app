@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import * as api from "@/api/client";
 import { Search, Eye, Pencil, Trash2, ChevronDown, ArrowLeft, FileText, ShoppingCart, X, Check, Calculator, FileDown, CookingPot, ClipboardList, Plus, User, CalendarDays, MapPin, MessageSquare, Download, Clock, ChevronRight, Loader2, CheckCircle2, AlertCircle, Truck } from "lucide-react";
-import { generateOfferPdf, generateShoppingListPdf, generateFoodCostPdf, generateKitchenPdf, generateSummaryPdf, type SummaryDocType } from "@/lib/generatePdf";
+import { generateOfferPdf, generateFoodCostPdf, generateKitchenPdf, generateSummaryPdf, type SummaryDocType } from "@/lib/generatePdf";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import type { LucideIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -18,40 +18,25 @@ import { toast } from "@/components/ui/sonner";
 import { format } from "date-fns";
 import { pl } from "date-fns/locale";
 import { FullscreenDateTimePicker } from "@/components/catering/FullscreenDateTimePicker";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  effectiveLineItemType,
+  isAddonLineItem,
+  isExpandableLineItem,
+  isFoodCostEligibleLineItem,
+  splitPrimaryAndAddonItems,
+} from "@/lib/orderLineItems";
+import { adminOrderItemToPdfLineItem } from "@/lib/pdfOrderMappers";
+import type {
+  DbClient,
+  FoodCostExtra,
+  Order,
+  OrderDocumentType,
+  OrderStatus,
+  PdfOrderLineItem,
+} from "@/types/orders";
 
-type OrderStatus = "Nowe zamówienie" | "Nowa oferta" | "Potwierdzone" | "W realizacji" | "Zrealizowane" | "Anulowane";
-
-interface OrderItem {
-  name: string;
-  quantity: number;
-  unit: string;
-  pricePerUnit: number;
-  total: number;
-  type?: "simple" | "bundle" | "configurable" | "extra" | "service";
-  subItems?: { name: string; quantity: number; unit: string; foodCostPerUnit?: number }[];
-  foodCostPerUnit?: number;
-}
-
-interface Order {
-  id: string;
-  dbId: string;
-  client: string;
-  clientId: string | null;
-  email: string;
-  phone: string;
-  event: string;
-  date: string;
-  deliveryAddress: string;
-  amount: string;
-  amountNum: number;
-  status: OrderStatus;
-  notes: string;
-  items: OrderItem[];
-  createdAt: string;
-  deliveryCost: number;
-  guestCount: number;
-  discount: number;
-}
+type OrderItem = PdfOrderLineItem;
 
 const statusColors: Record<OrderStatus, string> = {
   "Nowe zamówienie": "bg-blue-50 text-blue-700 border-blue-200",
@@ -205,10 +190,8 @@ const mockOrders: Order[] = [
 ];
 
 // ===== DOCUMENT TYPES =====
-type DocType = "offer" | "shopping-list" | "kitchen" | "food-cost" | "full";
-const docLabels: Record<DocType, { label: string; Icon: LucideIcon }> = {
+const docLabels: Record<OrderDocumentType, { label: string; Icon: LucideIcon }> = {
   "offer": { label: "Oferta", Icon: FileText },
-  "shopping-list": { label: "Lista zakupów", Icon: ShoppingCart },
   "kitchen": { label: "Rozpiska na kuchnię", Icon: CookingPot },
   "food-cost": { label: "Food cost", Icon: Calculator },
   "full": { label: "Wszystko w jednym", Icon: ClipboardList },
@@ -217,16 +200,8 @@ const docLabels: Record<DocType, { label: string; Icon: LucideIcon }> = {
 const fmtNum = (n: number) => n.toLocaleString("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 // ===== ORDER DOCUMENT VIEW =====
-interface FoodCostExtra {
-  id: string;
-  name: string;
-  amount: number;
-  isNew?: boolean;
-}
-
-const OrderDocumentView = ({ order, docType, onBack }: { order: Order; docType: DocType; onBack: () => void }) => {
+const OrderDocumentView = ({ order, docType, onBack }: { order: Order; docType: OrderDocumentType; onBack: () => void }) => {
   const showOffer = docType === "offer" || docType === "full";
-  const showShoppingList = docType === "shopping-list" || docType === "full";
   const showKitchen = docType === "kitchen" || docType === "full";
   const showFoodCost = docType === "food-cost" || docType === "full";
 
@@ -239,10 +214,9 @@ const OrderDocumentView = ({ order, docType, onBack }: { order: Order; docType: 
   useEffect(() => {
     if (!order.dbId || !showFoodCost) return;
     api.getAdminOrder(order.dbId)
-      .then((ord: unknown) => {
-        const o = ord as Record<string, unknown>;
-        const extras = (o.orderFoodCostExtras as Array<Record<string, unknown>>) ?? [];
-        setFcExtras(extras.map((d) => ({ id: String(d.id ?? ""), name: String(d.name ?? ""), amount: Number(d.amount ?? 0) })));
+      .then((ord) => {
+        const extras = ord.orderFoodCostExtras ?? [];
+        setFcExtras(extras.map((d) => ({ id: String(d.id ?? ""), name: d.name ?? "", amount: Number(d.amount ?? 0) })));
       })
       .catch(() => {});
   }, [order.dbId, showFoodCost]);
@@ -274,25 +248,12 @@ const OrderDocumentView = ({ order, docType, onBack }: { order: Order; docType: 
     toast.success("Pozycje kosztowe zapisane");
   };
 
-  // Aggregate ingredients
-  const ingredientMap: Record<string, { name: string; totalQty: number; unit: string }> = {};
+  type KitchenDishRow = { name: string; totalQty: number; unit: string; source: string };
+  const dishMap: Record<string, KitchenDishRow> = {};
   order.items.forEach((item) => {
-    if (item.subItems) {
-      item.subItems.forEach((sub) => {
-        const key = `${sub.name}__${sub.unit}`;
-        if (!ingredientMap[key]) ingredientMap[key] = { name: sub.name, totalQty: 0, unit: sub.unit };
-        ingredientMap[key].totalQty += sub.quantity;
-      });
-    }
-  });
-  const ingredients = Object.values(ingredientMap).sort((a, b) => a.name.localeCompare(b.name, "pl"));
-
-  // Dishes for kitchen
-  type DishEntry = { name: string; totalQty: number; unit: string; source: string };
-  const dishMap: Record<string, DishEntry> = {};
-  order.items.forEach((item) => {
-    if (item.type === "service" || item.type === "extra") return;
-    if ((item.type === "configurable" || item.type === "bundle") && item.subItems) {
+    const t = effectiveLineItemType(item);
+    if (isAddonLineItem(t)) return;
+    if (isExpandableLineItem(t) && item.subItems) {
       item.subItems.forEach((sub) => {
         const key = sub.name;
         if (!dishMap[key]) dishMap[key] = { name: sub.name, totalQty: 0, unit: sub.unit, source: item.name };
@@ -304,14 +265,23 @@ const OrderDocumentView = ({ order, docType, onBack }: { order: Order; docType: 
       dishMap[key].totalQty += item.quantity;
     }
   });
-  const dishes = Object.values(dishMap).sort((a, b) => a.name.localeCompare(b.name, "pl"));
+  const kitchenDishes = Object.values(dishMap).sort((a, b) => a.name.localeCompare(b.name, "pl"));
 
   // Food cost
-  const foodCostItems = order.items.filter((i) => i.type !== "service" && i.foodCostPerUnit).map((item) => ({
-    name: item.name, quantity: item.quantity, unit: item.unit,
-    foodCostPerUnit: item.foodCostPerUnit!, totalFoodCost: item.foodCostPerUnit! * item.quantity,
-    revenue: item.total, margin: item.total > 0 ? ((item.total - item.foodCostPerUnit! * item.quantity) / item.total) * 100 : 0,
-  }));
+  const foodCostItems = order.items.filter(isFoodCostEligibleLineItem).map((item) => {
+    const fc = item.foodCostPerUnit!;
+    const totalFoodCost = fc * item.quantity;
+    return {
+      name: item.name,
+      quantity: item.quantity,
+      unit: item.unit,
+      foodCostPerUnit: fc,
+      totalFoodCost,
+      revenue: item.total,
+      margin: item.total > 0 ? ((item.total - totalFoodCost) / item.total) * 100 : 0,
+    };
+  });
+  const { primary: offerPrimary, addons: offerAddons } = splitPrimaryAndAddonItems(order.items);
   const extrasTotal = fcExtras.reduce((s, e) => s + e.amount, 0);
   const totalFC = foodCostItems.reduce((s, i) => s + i.totalFoodCost, 0) + extrasTotal;
   const totalRev = foodCostItems.reduce((s, i) => s + i.revenue, 0);
@@ -333,7 +303,6 @@ const OrderDocumentView = ({ order, docType, onBack }: { order: Order; docType: 
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={async () => {
             if (showOffer) await generateOfferPdf(order);
-            else if (showShoppingList) await generateShoppingListPdf(order);
             else if (showKitchen) await generateKitchenPdf(order);
             else if (showFoodCost) await generateFoodCostPdf(order, fcExtras);
           }}>
@@ -355,70 +324,72 @@ const OrderDocumentView = ({ order, docType, onBack }: { order: Order; docType: 
               <p><span className="text-muted-foreground">Adres dostawy:</span> {order.deliveryAddress}</p>
               {order.notes && <p><span className="text-muted-foreground">Uwagi:</span> {order.notes}</p>}
             </div>
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="font-semibold text-foreground">Pozycja</TableHead>
-                  <TableHead className="font-semibold text-foreground text-center">Ilość</TableHead>
-                  <TableHead className="font-semibold text-foreground text-right">Cena jedn.</TableHead>
-                  <TableHead className="font-semibold text-foreground text-right">Razem</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {order.items.map((item, i) => (
-                  <TableRow key={i}>
-                    <TableCell className="font-medium">{item.name}</TableCell>
-                    <TableCell className="text-center">{item.quantity} {item.unit}</TableCell>
-                    <TableCell className="text-right text-muted-foreground">{fmtNum(item.pricePerUnit)} zł</TableCell>
-                    <TableCell className="text-right font-semibold">{fmtNum(item.total)} zł</TableCell>
-                  </TableRow>
-                ))}
-                {order.deliveryCost > 0 && (
-                  <TableRow>
-                    <TableCell className="font-medium">Dostawa</TableCell>
-                    <TableCell className="text-center">1</TableCell>
-                    <TableCell className="text-right text-muted-foreground">{fmtNum(order.deliveryCost)} zł</TableCell>
-                    <TableCell className="text-right font-semibold">{fmtNum(order.deliveryCost)} zł</TableCell>
-                  </TableRow>
-                )}
-                <TableRow className="hover:bg-transparent border-t-2">
-                  <TableCell colSpan={3} className="text-right font-semibold">Suma:</TableCell>
-                  <TableCell className="text-right font-bold text-primary text-lg">{order.amount}</TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* LISTA ZAKUPÓW */}
-      {showShoppingList && (
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2"><ShoppingCart className="w-5 h-5 text-primary" /> Lista zakupów</CardTitle>
-            <CardDescription>Składniki do zakupu</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {ingredients.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">Brak danych o składnikach</p>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow className="hover:bg-transparent">
-                    <TableHead className="font-semibold text-foreground">Składnik</TableHead>
-                    <TableHead className="font-semibold text-foreground text-right">Ilość</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {ingredients.map((ing, i) => (
-                    <TableRow key={i}>
-                      <TableCell className="font-medium">{ing.name}</TableCell>
-                      <TableCell className="text-right">{fmtNum(ing.totalQty)} {ing.unit}</TableCell>
+            <div className="space-y-6">
+              <div>
+                <h4 className="text-sm font-semibold text-foreground mb-2">Produkty</h4>
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead className="font-semibold text-foreground">Pozycja</TableHead>
+                      <TableHead className="font-semibold text-foreground text-center">Ilość</TableHead>
+                      <TableHead className="font-semibold text-foreground text-right">Cena jedn.</TableHead>
+                      <TableHead className="font-semibold text-foreground text-right">Razem</TableHead>
                     </TableRow>
-                  ))}
+                  </TableHeader>
+                  <TableBody>
+                    {offerPrimary.map((item, i) => (
+                      <TableRow key={i}>
+                        <TableCell className="font-medium">{item.name}</TableCell>
+                        <TableCell className="text-center">{item.quantity} {item.unit}</TableCell>
+                        <TableCell className="text-right text-muted-foreground">{fmtNum(item.pricePerUnit)} zł</TableCell>
+                        <TableCell className="text-right font-semibold">{fmtNum(item.total)} zł</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              {offerAddons.length > 0 ? (
+                <div className="rounded-lg border border-border bg-muted/20 p-3">
+                  <h4 className="text-sm font-semibold text-foreground mb-2">Dodatki i usługi</h4>
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="hover:bg-transparent">
+                        <TableHead className="font-semibold text-foreground">Pozycja</TableHead>
+                        <TableHead className="font-semibold text-foreground text-center">Ilość</TableHead>
+                        <TableHead className="font-semibold text-foreground text-right">Cena jedn.</TableHead>
+                        <TableHead className="font-semibold text-foreground text-right">Razem</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {offerAddons.map((item, i) => (
+                        <TableRow key={i}>
+                          <TableCell className="font-medium">{item.name}</TableCell>
+                          <TableCell className="text-center">{item.quantity} {item.unit}</TableCell>
+                          <TableCell className="text-right text-muted-foreground">{fmtNum(item.pricePerUnit)} zł</TableCell>
+                          <TableCell className="text-right font-semibold">{fmtNum(item.total)} zł</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : null}
+              <Table>
+                <TableBody>
+                  {order.deliveryCost > 0 && (
+                    <TableRow>
+                      <TableCell className="font-medium">Dostawa</TableCell>
+                      <TableCell className="text-center">1</TableCell>
+                      <TableCell className="text-right text-muted-foreground">{fmtNum(order.deliveryCost)} zł</TableCell>
+                      <TableCell className="text-right font-semibold">{fmtNum(order.deliveryCost)} zł</TableCell>
+                    </TableRow>
+                  )}
+                  <TableRow className="hover:bg-transparent border-t-2">
+                    <TableCell colSpan={3} className="text-right font-semibold">Suma:</TableCell>
+                    <TableCell className="text-right font-bold text-primary text-lg">{order.amount}</TableCell>
+                  </TableRow>
                 </TableBody>
               </Table>
-            )}
+            </div>
           </CardContent>
         </Card>
       )}
@@ -428,27 +399,33 @@ const OrderDocumentView = ({ order, docType, onBack }: { order: Order; docType: 
         <Card className="mb-6">
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2"><CookingPot className="w-5 h-5 text-primary" /> Rozpiska na kuchnię</CardTitle>
-            <CardDescription>Dania do przygotowania (zestawy rozbite na pozycje)</CardDescription>
+            <CardDescription>Łączne ilości dań (jak w PDF „Rozpiska na kuchnię”).</CardDescription>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="font-semibold text-foreground">Danie</TableHead>
-                  <TableHead className="font-semibold text-foreground text-muted-foreground">Źródło</TableHead>
-                  <TableHead className="font-semibold text-foreground text-right">Ilość</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {dishes.map((dish, i) => (
-                  <TableRow key={i}>
-                    <TableCell className="font-medium">{dish.name}</TableCell>
-                    <TableCell className="text-muted-foreground text-sm">{dish.source || "—"}</TableCell>
-                    <TableCell className="text-right">{dish.totalQty} {dish.unit}</TableCell>
+            {kitchenDishes.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">Brak pozycji kuchennych do wyświetlenia.</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="font-semibold text-foreground">Danie</TableHead>
+                    <TableHead className="font-semibold text-foreground text-right">Ilość</TableHead>
+                    <TableHead className="font-semibold text-foreground">Źródło</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {kitchenDishes.map((d, i) => (
+                    <TableRow key={i}>
+                      <TableCell className="font-medium">{d.name}</TableCell>
+                      <TableCell className="text-right whitespace-nowrap">
+                        {d.totalQty} {d.unit}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{d.source || "—"}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
           </CardContent>
         </Card>
       )}
@@ -565,11 +542,8 @@ const OrderDocumentView = ({ order, docType, onBack }: { order: Order; docType: 
   );
 };
 
-// ===== SHARED TYPES =====
-interface DbClient { id: string; firstName: string; lastName: string; email: string; phone: string; address?: string | null; city?: string | null; companyName?: string | null; }
-
 // ===== ORDER DETAIL VIEW =====
-const OrderDetailView = ({ order, onBack, onEdit, onGenerateDoc, onLinkClient }: { order: Order; onBack: () => void; onEdit: () => void; onGenerateDoc: (type: DocType) => void; onLinkClient: (orderId: string, clientId: string) => void }) => {
+const OrderDetailView = ({ order, onBack, onEdit, onGenerateDoc, onLinkClient }: { order: Order; onBack: () => void; onEdit: () => void; onGenerateDoc: (type: OrderDocumentType) => void; onLinkClient: (orderId: string, clientId: string) => void }) => {
   const [showClientSearch, setShowClientSearch] = useState(false);
   const [clientSearch, setClientSearch] = useState("");
   const [dbClients, setDbClients] = useState<DbClient[]>([]);
@@ -616,6 +590,7 @@ const OrderDetailView = ({ order, onBack, onEdit, onGenerateDoc, onLinkClient }:
   };
 
   const linkedClient = order.clientId ? dbClients.find(c => c.id === order.clientId) : null;
+  const { primary: detailPrimary, addons: detailAddons } = splitPrimaryAndAddonItems(order.items);
 
   return (
     <div>
@@ -638,7 +613,7 @@ const OrderDetailView = ({ order, onBack, onEdit, onGenerateDoc, onLinkClient }:
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
-            {(Object.keys(docLabels) as DocType[]).map((type) => {
+            {(Object.keys(docLabels) as OrderDocumentType[]).map((type) => {
               const DocIcon = docLabels[type].Icon;
               return (
                 <DropdownMenuItem key={type} onClick={() => onGenerateDoc(type)} className="cursor-pointer">
@@ -750,46 +725,100 @@ const OrderDetailView = ({ order, onBack, onEdit, onGenerateDoc, onLinkClient }:
       <Card className="mt-6">
         <CardHeader className="pb-3"><CardTitle className="text-base">Pozycje zamówienia</CardTitle></CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead className="font-semibold text-foreground">Produkt</TableHead>
-                <TableHead className="font-semibold text-foreground text-center">Ilość</TableHead>
-                <TableHead className="font-semibold text-foreground text-right">Cena jedn.</TableHead>
-                <TableHead className="font-semibold text-foreground text-right">Razem</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {order.items.map((item, i) => (
-                <TableRow key={i}>
-                  <TableCell className="font-medium">{item.name}</TableCell>
-                  <TableCell className="text-center">{item.quantity} {item.unit}</TableCell>
-                  <TableCell className="text-right text-muted-foreground">{item.pricePerUnit.toFixed(2)} zł</TableCell>
-                  <TableCell className="text-right font-semibold">{item.total.toFixed(2)} zł</TableCell>
+          <div className="space-y-6">
+            <div>
+              <h4 className="text-sm font-semibold text-foreground mb-2">Produkty</h4>
+              <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="font-semibold text-foreground">Produkt</TableHead>
+                    <TableHead className="font-semibold text-foreground text-center">Ilość</TableHead>
+                    <TableHead className="font-semibold text-foreground text-right">Cena jedn.</TableHead>
+                    <TableHead className="font-semibold text-foreground text-right">Razem</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {detailPrimary.map((item, i) => {
+                    if(item.subItems && item.subItems.length > 0) {
+                      return item.subItems.map((subItem, j) => (
+                        <>
+                        <TableRow key={`${i}-${j}`}>
+                          <TableCell className="font-medium">{item.name}</TableCell>
+                          <TableCell className="text-center">{item.quantity} {item.unit}</TableCell>
+                          <TableCell className="text-right text-muted-foreground">{item.pricePerUnit.toFixed(2)} zł</TableCell>
+                          <TableCell className="text-right font-semibold">{item.total.toFixed(2)} zł</TableCell>
+                        </TableRow>
+                        <TableRow key={`${i}-${j}`}>
+                          <TableCell className="font-medium">{subItem.name}</TableCell>
+                          <TableCell className="text-center">{subItem.quantity} {subItem.unit}</TableCell>
+                          <TableCell className="text-right text-muted-foreground">{subItem.foodCostPerUnit?.toFixed(2) ?? "0.00"} zł</TableCell>
+                          {/* <TableCell className="text-right font-semibold">{(subItem.pricePerUnit * subItem.quantity).toFixed(2)} zł</TableCell> */}
+                        </TableRow>
+                        </>
+                      ));
+                    }
+                    return (
+                      <TableRow key={i}>
+                        <TableCell className="font-medium">{item.name}</TableCell>
+                        <TableCell className="text-center">{item.quantity} {item.unit}</TableCell>
+                        <TableCell className="text-right text-muted-foreground">{item.pricePerUnit.toFixed(2)} zł</TableCell>
+                        <TableCell className="text-right font-semibold">{item.total.toFixed(2)} zł</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+            {detailAddons.length > 0 ? (
+              <div className="rounded-lg border border-border bg-muted/20 p-3">
+                <h4 className="text-sm font-semibold text-foreground mb-2">Dodatki i usługi</h4>
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead className="font-semibold text-foreground">Produkt</TableHead>
+                      <TableHead className="font-semibold text-foreground text-center">Ilość</TableHead>
+                      <TableHead className="font-semibold text-foreground text-right">Cena jedn.</TableHead>
+                      <TableHead className="font-semibold text-foreground text-right">Razem</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {detailAddons.map((item, i) => (
+                      <TableRow key={i}>
+                        <TableCell className="font-medium">{item.name}</TableCell>
+                        <TableCell className="text-center">{item.quantity} {item.unit}</TableCell>
+                        <TableCell className="text-right text-muted-foreground">{item.pricePerUnit.toFixed(2)} zł</TableCell>
+                        <TableCell className="text-right font-semibold">{item.total.toFixed(2)} zł</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            ) : null}
+            <Table>
+              <TableBody>
+                <TableRow className="hover:bg-transparent border-t-2">
+                  <TableCell colSpan={3} className="text-right font-semibold text-foreground">
+                    {order.discount > 0 ? "Suma pozycji:" : "Suma:"}
+                  </TableCell>
+                  <TableCell className="text-right font-semibold text-foreground">
+                    {order.discount > 0 ? `${fmtNum(order.items.reduce((s, i) => s + i.total, 0))} zł` : order.amount}
+                  </TableCell>
                 </TableRow>
-              ))}
-              <TableRow className="hover:bg-transparent border-t-2">
-                <TableCell colSpan={3} className="text-right font-semibold text-foreground">
-                  {order.discount > 0 ? "Suma pozycji:" : "Suma:"}
-                </TableCell>
-                <TableCell className="text-right font-semibold text-foreground">
-                  {order.discount > 0 ? fmtNum(order.items.reduce((s, i) => s + i.total, 0)) + " zł" : order.amount}
-                </TableCell>
-              </TableRow>
-              {order.discount > 0 && (
-                <>
-                  <TableRow className="hover:bg-transparent">
-                    <TableCell colSpan={3} className="text-right font-semibold text-destructive">Rabat:</TableCell>
-                    <TableCell className="text-right font-semibold text-destructive">-{fmtNum(order.discount)} zł</TableCell>
-                  </TableRow>
-                  <TableRow className="hover:bg-transparent">
-                    <TableCell colSpan={3} className="text-right font-bold text-foreground text-base">Do zapłaty:</TableCell>
-                    <TableCell className="text-right font-bold text-primary text-lg">{order.amount}</TableCell>
-                  </TableRow>
-                </>
-              )}
-            </TableBody>
-          </Table>
+                {order.discount > 0 && (
+                  <>
+                    <TableRow className="hover:bg-transparent">
+                      <TableCell colSpan={3} className="text-right font-semibold text-destructive">Rabat:</TableCell>
+                      <TableCell className="text-right font-semibold text-destructive">-{fmtNum(order.discount)} zł</TableCell>
+                    </TableRow>
+                    <TableRow className="hover:bg-transparent">
+                      <TableCell colSpan={3} className="text-right font-bold text-foreground text-base">Do zapłaty:</TableCell>
+                      <TableCell className="text-right font-bold text-primary text-lg">{order.amount}</TableCell>
+                    </TableRow>
+                  </>
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
     </div>
@@ -797,7 +826,7 @@ const OrderDetailView = ({ order, onBack, onEdit, onGenerateDoc, onLinkClient }:
 };
 
 // ===== DYNAMIC PRODUCT CATALOG =====
-type CatalogProduct = { id: string; name: string; unit: string; defaultPrice: number; type: OrderItem["type"]; variants?: { id: string; name: string; price: number }[]; optionGroups?: { id: string; name: string; minSelections: number; maxSelections: number; options: { id: string; name: string }[] }[] };
+type CatalogProduct = { id: string; name: string; unit: string; defaultPrice: number; type: string; variants?: { id: string; name: string; price: number }[]; optionGroups?: { id: string; name: string; minSelections: number; maxSelections: number; options: { id: string; name: string }[] }[] };
 
 function useCatalogProducts() {
   const [catalog, setCatalog] = useState<CatalogProduct[]>([]);
@@ -990,6 +1019,73 @@ const OrderEditView = ({ order, onBack, onSave }: { order: Order; onBack: () => 
     p.name.toLowerCase().includes(addSearch.toLowerCase())
   );
 
+  const primaryRows = items
+    .map((item, index) => ({ item, index }))
+    .filter(({ item }) => !isAddonLineItem(effectiveLineItemType(item)));
+  const addonRows = items
+    .map((item, index) => ({ item, index }))
+    .filter(({ item }) => isAddonLineItem(effectiveLineItemType(item)));
+
+  const renderEditRow = ({ item, index }: { item: OrderItem; index: number }) => (
+    <TableRow key={index}>
+      <TableCell>
+        <div className="space-y-1">
+          <span className="font-medium">{item.name}</span>
+          {(item.subItems?.length ?? 0) > 0 && (
+            <Collapsible>
+              <CollapsibleTrigger className="group flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground py-0.5">
+                <ChevronRight className="w-3.5 h-3.5 shrink-0 transition-transform group-data-[state=open]:rotate-90" />
+                Szczegóły ({item.subItems!.length})
+              </CollapsibleTrigger>
+              <CollapsibleContent className="pl-5 pt-1 space-y-1">
+                {item.subItems!.map((sub, si) => (
+                  <p key={si} className="text-xs text-muted-foreground border-l-2 border-primary/20 pl-2">
+                    {sub.name} — {fmtNum(sub.quantity)} {sub.unit}
+                  </p>
+                ))}
+              </CollapsibleContent>
+            </Collapsible>
+          )}
+        </div>
+      </TableCell>
+      <TableCell className="text-center">
+        <div className="flex items-center gap-1 justify-center">
+          <Input
+            type="number"
+            min={1}
+            value={item.quantity}
+            onChange={(e) => updateItem(index, "quantity", Math.max(1, parseInt(e.target.value, 10) || 1))}
+            className="w-20 h-8 text-center text-sm"
+          />
+          <span className="text-xs text-muted-foreground">{item.unit}</span>
+        </div>
+      </TableCell>
+      <TableCell className="text-right">
+        <div className="flex items-center gap-1 justify-end">
+          <Input
+            type="number"
+            min={0}
+            step={0.01}
+            value={item.pricePerUnit}
+            onChange={(e) => updateItem(index, "pricePerUnit", Math.max(0, parseFloat(e.target.value) || 0))}
+            className="w-28 h-8 text-right text-sm"
+          />
+          <span className="text-xs text-muted-foreground">zł</span>
+        </div>
+      </TableCell>
+      <TableCell className="text-right font-semibold">{fmtNum(item.total)} zł</TableCell>
+      <TableCell>
+        <button
+          type="button"
+          onClick={() => removeItem(index)}
+          className="p-1.5 rounded-md text-destructive/60 hover:text-destructive hover:bg-destructive/10 transition-colors"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </TableCell>
+    </TableRow>
+  );
+
   return (
     <div>
       <div className="flex items-center gap-4 mb-6">
@@ -1092,66 +1188,41 @@ const OrderEditView = ({ order, onBack, onSave }: { order: Order; onBack: () => 
               </div>
             )}
 
-            {/* Items table */}
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="font-semibold text-foreground">Produkt</TableHead>
-                  <TableHead className="font-semibold text-foreground text-center w-32">Ilość</TableHead>
-                  <TableHead className="font-semibold text-foreground text-right w-40">Cena jedn.</TableHead>
-                  <TableHead className="font-semibold text-foreground text-right w-32">Razem</TableHead>
-                  <TableHead className="w-12"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {items.map((item, i) => (
-                  <TableRow key={i}>
-                    <TableCell>
-                      <span className="font-medium">{item.name}</span>
-                      {item.subItems && item.subItems.length > 0 && (
-                        <div className="mt-1 space-y-0.5">
-                          {item.subItems.map((sub, si) => (
-                            <p key={si} className="text-xs text-muted-foreground pl-3 border-l-2 border-primary/20">{sub.name}{sub.quantity > 1 ? ` ×${sub.quantity}` : ""}</p>
-                          ))}
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <div className="flex items-center gap-1 justify-center">
-                        <Input
-                          type="number"
-                          min={1}
-                          value={item.quantity}
-                          onChange={(e) => updateItem(i, "quantity", Math.max(1, parseInt(e.target.value) || 1))}
-                          className="w-20 h-8 text-center text-sm"
-                        />
-                        <span className="text-xs text-muted-foreground">{item.unit}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center gap-1 justify-end">
-                        <Input
-                          type="number"
-                          min={0}
-                          step={0.01}
-                          value={item.pricePerUnit}
-                          onChange={(e) => updateItem(i, "pricePerUnit", Math.max(0, parseFloat(e.target.value) || 0))}
-                          className="w-28 h-8 text-right text-sm"
-                        />
-                        <span className="text-xs text-muted-foreground">zł</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right font-semibold">{fmtNum(item.total)} zł</TableCell>
-                    <TableCell>
-                      <button
-                        onClick={() => removeItem(i)}
-                        className="p-1.5 rounded-md text-destructive/60 hover:text-destructive hover:bg-destructive/10 transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </TableCell>
-                  </TableRow>
-                ))}
+            <div className="space-y-6">
+              <div>
+                <h4 className="text-sm font-semibold text-foreground mb-2">Produkty</h4>
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead className="font-semibold text-foreground">Produkt</TableHead>
+                      <TableHead className="font-semibold text-foreground text-center w-32">Ilość</TableHead>
+                      <TableHead className="font-semibold text-foreground text-right w-40">Cena jedn.</TableHead>
+                      <TableHead className="font-semibold text-foreground text-right w-32">Razem</TableHead>
+                      <TableHead className="w-12"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>{primaryRows.map(renderEditRow)}</TableBody>
+                </Table>
+              </div>
+              {addonRows.length > 0 ? (
+                <div className="rounded-lg border border-border bg-muted/20 p-3">
+                  <h4 className="text-sm font-semibold text-foreground mb-2">Dodatki i usługi</h4>
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="hover:bg-transparent">
+                        <TableHead className="font-semibold text-foreground">Produkt</TableHead>
+                        <TableHead className="font-semibold text-foreground text-center w-32">Ilość</TableHead>
+                        <TableHead className="font-semibold text-foreground text-right w-40">Cena jedn.</TableHead>
+                        <TableHead className="font-semibold text-foreground text-right w-32">Razem</TableHead>
+                        <TableHead className="w-12"></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>{addonRows.map(renderEditRow)}</TableBody>
+                  </Table>
+                </div>
+              ) : null}
+              <Table>
+                <TableBody>
                 <TableRow className="hover:bg-transparent border-t-2">
                   <TableCell colSpan={3} className="text-right font-semibold text-foreground">Suma pozycji:</TableCell>
                   <TableCell className="text-right font-semibold text-foreground">{fmtNum(totalAmount)} zł</TableCell>
@@ -1171,6 +1242,7 @@ const OrderEditView = ({ order, onBack, onSave }: { order: Order; onBack: () => 
                 </TableRow>
               </TableBody>
             </Table>
+            </div>
           </CardContent>
         </Card>
 
@@ -1189,7 +1261,6 @@ const OrderEditView = ({ order, onBack, onSave }: { order: Order; onBack: () => 
 // ===== SUMMARY SHEET =====
 const summaryDocLabels: Record<SummaryDocType, { label: string; Icon: LucideIcon }> = {
   "zamowienia": { label: "Lista zamówień", Icon: FileText },
-  "lista-zakupow": { label: "Lista zakupów", Icon: ShoppingCart },
   "lista-dan": { label: "Lista dań", Icon: CookingPot },
   "food-cost": { label: "Food cost", Icon: Calculator },
 };
@@ -1934,7 +2005,7 @@ const OrdersView = () => {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [view, setView] = useState<"list" | "detail" | "edit" | "document">("list");
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
-  const [selectedDocType, setSelectedDocType] = useState<DocType>("offer");
+  const [selectedDocType, setSelectedDocType] = useState<OrderDocumentType>("offer");
   const [showAddOrder, setShowAddOrder] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
 
@@ -1947,48 +2018,32 @@ const OrdersView = () => {
 
   const fetchOrders = useCallback(async () => {
     try {
-      const dbOrders = await api.getAdminOrders() as Array<Record<string, unknown>>;
+      const dbOrders = await api.getAdminOrders();
       if (!dbOrders || dbOrders.length === 0) return;
 
       const mapped: Order[] = dbOrders.map((o) => {
-        const orderItems = (o.orderItems as Array<Record<string, unknown>>) ?? [];
-        const items: OrderItem[] = orderItems.map((i) => ({
-          name: String(i.name ?? ""),
-          quantity: Number(i.quantity ?? 1),
-          unit: String(i.unit ?? "szt."),
-          pricePerUnit: Number(i.pricePerUnit ?? i.price_per_unit ?? 0),
-          total: Number(i.total ?? 0),
-          type: ((i.itemType ?? i.item_type) as OrderItem["type"]) || "simple",
-          foodCostPerUnit: i.foodCostPerUnit ?? i.food_cost_per_unit ? Number(i.foodCostPerUnit ?? i.food_cost_per_unit) : undefined,
-          subItems: ((i.subItems as Array<Record<string, unknown>>) ?? []).map((s) => ({
-            name: String(s.name ?? ""),
-            quantity: Number(s.quantity ?? 0),
-            unit: String(s.unit ?? "szt."),
-            foodCostPerUnit: s.foodCostPerUnit ?? s.food_cost_per_unit ? Number(s.foodCostPerUnit ?? s.food_cost_per_unit) : undefined,
-          })),
-        }));
+        const orderItems = o.orderItems ?? [];
+        const items: OrderItem[] = orderItems.map(adminOrderItemToPdfLineItem);
 
-        const eventDate = o.eventDate ?? o.event_date;
-        const createdAt = o.createdAt ?? o.created_at;
         return {
-          id: String(o.orderNumber ?? o.order_number ?? ""),
-          dbId: String(o.id),
-          clientId: o.clientId ?? o.client_id ? String(o.clientId ?? o.client_id) : null,
-          client: String(o.clientName ?? o.client_name ?? ""),
-          email: String(o.clientEmail ?? o.client_email ?? ""),
-          phone: String(o.clientPhone ?? o.client_phone ?? ""),
-          event: String(o.eventType ?? o.event_type ?? ""),
-          date: formatOrderDate(eventDate != null ? String(eventDate) : null),
-          deliveryAddress: String(o.deliveryAddress ?? o.delivery_address ?? ""),
+          id: String(o.orderNumber ?? ""),
+          dbId: String(o.id ?? ""),
+          clientId: o.clientId ? String(o.clientId) : null,
+          client: o.clientName ?? "",
+          email: o.clientEmail ?? "",
+          phone: o.clientPhone ?? "",
+          event: o.eventType ?? "",
+          date: formatOrderDate(o.eventDate != null ? String(o.eventDate) : null),
+          deliveryAddress: o.deliveryAddress ?? "",
           amount: fmtNum(Number(o.amount ?? 0)) + " zł",
           amountNum: Number(o.amount ?? 0),
           status: (o.status as OrderStatus) || "Nowe zamówienie",
-          notes: String(o.notes ?? ""),
+          notes: o.notes ?? "",
           items,
-          createdAt: formatOrderDate(createdAt != null ? String(createdAt) : null),
-          deliveryCost: Number(o.deliveryCost ?? o.delivery_cost ?? 0) || 0,
-          guestCount: Number(o.guestCount ?? o.guest_count ?? 0) || 0,
-          discount: Number((o as Record<string, unknown>).discount) || 0,
+          createdAt: formatOrderDate(o.createdAt != null ? String(o.createdAt) : null),
+          deliveryCost: Number(o.deliveryCost ?? 0) || 0,
+          guestCount: Number(o.guestCount ?? 0) || 0,
+          discount: Number(o.discount ?? 0) || 0,
         };
       });
 
@@ -2058,6 +2113,7 @@ const OrdersView = () => {
           notes: updated.notes,
           deliveryAddress: updated.deliveryAddress,
           amount: updated.amountNum,
+          discount: updated.discount,
           orderItems: updated.items.map((item) => ({
             name: item.name,
             quantity: item.quantity,
@@ -2070,6 +2126,7 @@ const OrdersView = () => {
               name: sub.name,
               quantity: sub.quantity,
               unit: sub.unit,
+              foodCostPerUnit: sub.foodCostPerUnit ?? 0,
             })),
           })),
         });
@@ -2080,7 +2137,7 @@ const OrdersView = () => {
     }
   };
 
-  const handleGenerateDoc = (type: DocType) => {
+  const handleGenerateDoc = (type: OrderDocumentType) => {
     setSelectedDocType(type);
     setView("document");
   };

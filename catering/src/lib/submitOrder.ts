@@ -16,6 +16,7 @@ export async function submitOrder(
   extraBundles: ExpandableExtra[],
   eventTypes: { id: string; name: string }[],
   submissionType: SubmissionType = "offer",
+  allowedExtrasCategoryIds?: Set<string>,
 ): Promise<{ orderId: string; orderNumber: string }> {
   const ct = order.cateringType;
   const eventType = eventTypes.find((e) => e.id === order.eventType);
@@ -27,6 +28,7 @@ export async function submitOrder(
     total: number;
     unit: string;
     itemType: string;
+    subItems?: Array<{ name: string; quantity: number; unit: string }>;
   }> = [];
 
   for (const [productId, qty] of Object.entries(order.simpleQuantities)) {
@@ -61,6 +63,7 @@ export async function submitOrder(
               total: price * qty,
               unit: "szt.",
               itemType: "expandable",
+              subItems: [{ name: variant.name, quantity: qty, unit: "szt." }],
             });
           }
         }
@@ -73,6 +76,17 @@ export async function submitOrder(
       const product = products.find((p) => p.id === productId);
       if (product && product.type === "configurable") {
         const price = getConfigurablePrice(product, ct);
+        const chosenSubItems = Object.entries(data.options ?? {}).flatMap(([groupId, optionIds]) => {
+          const group = product.optionGroups.find((g) => g.id === groupId);
+          return (optionIds ?? []).map((optionId) => {
+            const option = group?.options.find((o) => o.id === optionId);
+            return {
+              name: group?.name ? `${group.name}: ${option?.name ?? optionId}` : (option?.name ?? optionId),
+              quantity: data.quantity,
+              unit: "os.",
+            };
+          });
+        });
         orderItems.push({
           name: product.name,
           quantity: data.quantity,
@@ -80,6 +94,7 @@ export async function submitOrder(
           total: price * data.quantity,
           unit: "os.",
           itemType: "configurable",
+          subItems: chosenSubItems,
         });
       }
     }
@@ -88,7 +103,11 @@ export async function submitOrder(
   for (const [extraId, qty] of Object.entries(order.selectedExtras)) {
     if (qty > 0) {
       const extra = extraItems.find((e) => e.id === extraId);
-      if (extra) {
+      const isAllowedByCategory =
+        !allowedExtrasCategoryIds ||
+        !extra?.extrasCategoryId ||
+        allowedExtrasCategoryIds.has(extra.extrasCategoryId);
+      if (extra && isAllowedByCategory) {
         const price = getExtraPrice(extra, ct);
         orderItems.push({
           name: extra.name,
@@ -104,29 +123,43 @@ export async function submitOrder(
 
   for (const [bundleId, variants] of Object.entries(order.selectedExpandableExtras ?? {})) {
     const bundle = extraBundles.find((b) => b.id === bundleId);
-    if (bundle) {
-      for (const [variantId, qty] of Object.entries(variants)) {
-        if (qty > 0) {
-          const variant = bundle.variants.find((v) => v.id === variantId);
-          if (variant) {
-            const price = getExtraBundleVariantPrice(variant, ct);
-            orderItems.push({
-              name: `${bundle.name}: ${variant.name}`,
-              quantity: qty,
-              pricePerUnit: price,
-              total: price * qty,
-              unit: "szt.",
-              itemType: "extra_bundle",
-            });
-          }
-        }
-      }
+    if (!bundle) continue;
+    const isAllowedByCategory =
+      !allowedExtrasCategoryIds ||
+      !bundle.extrasCategoryId ||
+      allowedExtrasCategoryIds.has(bundle.extrasCategoryId);
+    if (!isAllowedByCategory) continue;
+    const subItems: Array<{ name: string; quantity: number; unit: string }> = [];
+    let bundleTotal = 0;
+    for (const [variantId, qty] of Object.entries(variants)) {
+      if (qty <= 0) continue;
+      const variant = bundle.variants.find((v) => v.id === variantId);
+      if (!variant) continue;
+      const price = getExtraBundleVariantPrice(variant, ct);
+      const lineTotal = price * qty;
+      bundleTotal += lineTotal;
+      subItems.push({ name: variant.name, quantity: qty, unit: "szt." });
+    }
+    if (subItems.length > 0) {
+      orderItems.push({
+        name: bundle.name,
+        quantity: 1,
+        pricePerUnit: bundleTotal,
+        total: bundleTotal,
+        unit: "kpl.",
+        itemType: "extra_bundle",
+        subItems,
+      });
     }
   }
 
   if (order.selectedPackaging) {
     const packaging = packagingOptions.find((p) => p.id === order.selectedPackaging);
-    if (packaging) {
+    const isAllowedByCategory =
+      !allowedExtrasCategoryIds ||
+      !packaging?.extrasCategoryId ||
+      allowedExtrasCategoryIds.has(packaging.extrasCategoryId);
+    if (packaging && isAllowedByCategory) {
       const price = getPackagingPrice(packaging, ct);
       orderItems.push({
         name: packaging.name,
@@ -141,7 +174,11 @@ export async function submitOrder(
 
   if (order.selectedWaiterService) {
     const service = waiterServiceOptions.find((s) => s.id === order.selectedWaiterService);
-    if (service) {
+    const isAllowedByCategory =
+      !allowedExtrasCategoryIds ||
+      !service?.extrasCategoryId ||
+      allowedExtrasCategoryIds.has(service.extrasCategoryId);
+    if (service && isAllowedByCategory) {
       const price = getWaiterPrice(service, ct);
       orderItems.push({
         name: service.name,
