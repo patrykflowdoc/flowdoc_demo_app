@@ -1355,8 +1355,8 @@ const AddOrderSheet = ({ open, onClose, onAdd }: { open: boolean; onClose: () =>
   const [deliveryBuilding, setDeliveryBuilding] = useState("");
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [deliveryCost, setDeliveryCost] = useState(0);
-  const [deposit, setDeposit] = useState(0);
-  const [discount, setDiscount] = useState(0);
+  // const [deposit, setDeposit] = useState(0);
+  // const [discount, setDiscount] = useState(0);
   const [deliveryDistanceKm, setDeliveryDistanceKm] = useState<number | null>(null);
   const [deliveryCalculating, setDeliveryCalculating] = useState(false);
   const [deliveryError, setDeliveryError] = useState<string | null>(null);
@@ -1536,7 +1536,8 @@ const AddOrderSheet = ({ open, onClose, onAdd }: { open: boolean; onClose: () =>
       dbId: "", clientId: selectedClientId,
       client: clientName, email: clientEmail, phone: clientPhone,
       event, date: date || dateStr, deliveryAddress: cateringType === "na_sali" ? "Na sali" : (deliveryAddress || `${deliveryStreet} ${deliveryBuilding}, ${deliveryCity}`), notes, items,
-      amount: fmtNum(totalAmount + effectiveDeliveryCost - deposit - discount) + " zł", amountNum: totalAmount + effectiveDeliveryCost - deposit - discount,
+      // TODO: add deposit logic here
+      amount: fmtNum(totalAmount + effectiveDeliveryCost) + " zł", amountNum: totalAmount + effectiveDeliveryCost,
       status: "Nowe zamówienie", createdAt: dateStr,
       deliveryCost: effectiveDeliveryCost, guestCount: 0, discount: 0, 
       // TODO: add deposit logic here
