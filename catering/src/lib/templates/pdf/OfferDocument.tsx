@@ -10,7 +10,7 @@ export function OfferDocument({ order }: { order: PdfOrderDocumentData }) {
   const meta: string[] = [`Adres dostawy: ${order.deliveryAddress || "—"}`];
   if (order.guestCount > 0) meta.push(`Liczba gości: ${order.guestCount}`);
   if (order.notes) meta.push(`Uwagi: ${order.notes}`);
-
+  const calculatedAmount = (Number(order.amountNum) + Number(order.discount ?? 0) - Number(order.deposit ?? 0)).toFixed(2);
   const tailRows: { kind: "delivery" | "discount"; label: string; qty: string; ppu: string; total: string }[] = [];
   if (order.deliveryCost > 0) {
     tailRows.push({
@@ -30,7 +30,6 @@ export function OfferDocument({ order }: { order: PdfOrderDocumentData }) {
       total: `-${fmtPdfNum(order.discount)} zł`,
     });
   }
-
   return (
     <Document>
       <Page size="A4" style={pdfStyles.page}>
@@ -57,8 +56,8 @@ export function OfferDocument({ order }: { order: PdfOrderDocumentData }) {
             ))}
           </View>
         ) : null}
-
-        <OfferPayRow amountLabel="DO ZAPŁATY:" amount={order.amount} />
+        
+        <OfferPayRow amountLabel="DO ZAPŁATY:" amount={calculatedAmount} />
 
         {order.guestCount > 0 ? (
           <Text style={pdfStyles.mutedNote}>

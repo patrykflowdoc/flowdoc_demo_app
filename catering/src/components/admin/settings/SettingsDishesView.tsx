@@ -1419,7 +1419,7 @@ const ConfigSetsTab = ({ configSets, dishes, categories, reload }: { configSets:
                     </div>
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Konwersja</Label>
+                    <Label className="text-xs">Przelicznik</Label>
                     <Input type="number" step="0.5" value={groupConventer} onChange={(e) => setGroupConventer(e.target.value)} />
                   </div>
 
@@ -1444,7 +1444,7 @@ const ConfigSetsTab = ({ configSets, dishes, categories, reload }: { configSets:
                       <>
                       <DishPicker dishes={dishes} selectedDishId={null} onSelect={addDishAsOption} />
                       <div className="space-y-1">
-                        <Label className="text-xs">Konwersja dla dania</Label>
+                        <Label className="text-xs">Przelicznik dla dania</Label>
                       <Input type="number" step="0.5" value={groupDishConventer} onChange={(e) => setGroupDishConventer(e.target.value)} />
                       </div>
                       </>

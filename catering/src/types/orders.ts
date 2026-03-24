@@ -40,6 +40,7 @@ export type PdfOrderDocumentData = {
   deliveryCost: number;
   guestCount: number;
   discount?: number;
+  deposit?: number;
   items: PdfOrderLineItem[];
 };
 
@@ -80,6 +81,7 @@ export interface Order {
   deliveryCost: number;
   guestCount: number;
   discount: number;
+  deposit: number;
 }
 
 /** CRM client row used when linking orders to clients. */

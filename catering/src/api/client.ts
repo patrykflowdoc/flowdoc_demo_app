@@ -276,6 +276,10 @@ export async function updateAdminOrder(id: string, body: Record<string, unknown>
   return request(`/api/admin/orders/${id}`, { method: "PATCH", body });
 }
 
+export async function deleteAdminOrder(id: string): Promise<void> {
+  return request(`/api/admin/orders/${id}`, { method: "DELETE" });
+}
+
 export async function getAdminCatalog(): Promise<{
   dishes: Array<{ id: string; name: string; unit_label: string; price_per_unit: number; price_brutto: number }>;
   bundles: Array<{ id: string; name: string; base_price: number; bundle_variants: Array<{ id: string; name: string; price: number; sort_order: number }> }>;

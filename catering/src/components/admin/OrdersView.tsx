@@ -50,143 +50,6 @@ const statusColors: Record<OrderStatus, string> = {
 const allStatuses: OrderStatus[] = ["Nowe zamówienie", "Nowa oferta", "Potwierdzone", "W realizacji", "Zrealizowane", "Anulowane"];
 
 const mockOrders: Order[] = [
-  {
-    id: "ZAM-KOC8L7K", dbId: "", clientId: null, client: "Anna Kowalska", email: "anna.k@email.pl", phone: "+48 500 111 222",
-    event: "Urodziny", date: "28 sty 2026", deliveryAddress: "ul. Kwiatowa 5, Warszawa",
-    amount: "2 211,00 zł", amountNum: 2211, status: "Nowe zamówienie", notes: "Bez orzechów - alergia",
-    createdAt: "15 sty 2026", deliveryCost: 50, guestCount: 30, discount: 0,
-    items: [
-      { name: "Patera Serów Europejskich", quantity: 2, unit: "szt.", pricePerUnit: 450, total: 900, type: "simple", foodCostPerUnit: 135,
-        subItems: [
-          { name: "Brie francuski", quantity: 300, unit: "g", foodCostPerUnit: 0.045 },
-          { name: "Camembert z ziołami", quantity: 300, unit: "g", foodCostPerUnit: 0.04 },
-          { name: "Gouda długo dojrzewająca", quantity: 400, unit: "g", foodCostPerUnit: 0.035 },
-          { name: "Roquefort", quantity: 200, unit: "g", foodCostPerUnit: 0.08 },
-          { name: "Winogrona", quantity: 400, unit: "g", foodCostPerUnit: 0.012 },
-          { name: "Orzechy włoskie", quantity: 200, unit: "g", foodCostPerUnit: 0.06 },
-          { name: "Miód akacjowy", quantity: 100, unit: "ml", foodCostPerUnit: 0.04 },
-        ]
-      },
-      { name: "Patera Wędlin Premium", quantity: 1, unit: "szt.", pricePerUnit: 520, total: 520, type: "simple", foodCostPerUnit: 180,
-        subItems: [
-          { name: "Szynka parmeńska", quantity: 200, unit: "g", foodCostPerUnit: 0.12 },
-          { name: "Salami Milano", quantity: 150, unit: "g", foodCostPerUnit: 0.06 },
-          { name: "Chorizo Iberico", quantity: 150, unit: "g", foodCostPerUnit: 0.07 },
-          { name: "Oliwki Kalamata", quantity: 150, unit: "g", foodCostPerUnit: 0.03 },
-        ]
-      },
-      { name: "Mini Burgery", quantity: 20, unit: "szt.", pricePerUnit: 15, total: 300, type: "bundle", foodCostPerUnit: 5.5,
-        subItems: [
-          { name: "Mini Burger Klasyczny", quantity: 12, unit: "szt.", foodCostPerUnit: 5.5 },
-          { name: "Mini Burger Vege", quantity: 8, unit: "szt.", foodCostPerUnit: 4.2 },
-        ]
-      },
-      { name: "Sushi Nigiri Sake", quantity: 30, unit: "szt.", pricePerUnit: 8, total: 240, type: "simple", foodCostPerUnit: 3.2 },
-      { name: "Obsługa kelnerska 4h", quantity: 1, unit: "szt.", pricePerUnit: 251, total: 251, type: "service" },
-    ],
-  },
-  {
-    id: "ZAM-KOC01SQ", dbId: "", clientId: null, client: "Jan Nowak", email: "jan.nowak@email.pl", phone: "+48 600 333 444",
-    event: "", date: "21 sty 2026", deliveryAddress: "ul. Długa 12, Kraków",
-    amount: "350,00 zł", amountNum: 350, status: "Potwierdzone", notes: "",
-    createdAt: "10 sty 2026", deliveryCost: 0, guestCount: 10, discount: 0,
-    items: [
-      { name: "Antipasto Włoskie", quantity: 1, unit: "szt.", pricePerUnit: 350, total: 350 },
-    ],
-  },
-  {
-    id: "ZAM-KOC5CJA", dbId: "", clientId: null, client: "Maria Wiśniewska", email: "maria.w@email.pl", phone: "+48 700 555 666",
-    event: "Wesele", date: "28 sty 2026", deliveryAddress: "Dworek pod Lipami, Piaseczno",
-    amount: "3 276,00 zł", amountNum: 3276, status: "Zrealizowane", notes: "Dekoracja stołu premium",
-    createdAt: "5 sty 2026", deliveryCost: 0, guestCount: 30, discount: 0,
-    items: [
-      { name: "Zestaw nr 2 Premium", quantity: 30, unit: "os.", pricePerUnit: 95, total: 2850, type: "configurable", foodCostPerUnit: 32,
-        subItems: [
-          { name: "Polędwica wołowa z sosem z zielonym pieprzem", quantity: 30, unit: "os.", foodCostPerUnit: 12 },
-          { name: "Łosoś grillowany z masłem czosnkowym", quantity: 30, unit: "os.", foodCostPerUnit: 9 },
-          { name: "Carpaccio z polędwicy", quantity: 30, unit: "os.", foodCostPerUnit: 6 },
-          { name: "Crème brûlée", quantity: 30, unit: "os.", foodCostPerUnit: 3 },
-          { name: "Fondant czekoladowy", quantity: 30, unit: "os.", foodCostPerUnit: 2 },
-        ]
-      },
-      { name: "Dekoracja stołu", quantity: 3, unit: "szt.", pricePerUnit: 142, total: 426, type: "extra", foodCostPerUnit: 45 },
-    ],
-  },
-  {
-    id: "ZAM-KOC1RA9", dbId: "", clientId: null, client: "Piotr Zieliński", email: "piotr.z@email.pl", phone: "+48 800 777 888",
-    event: "", date: "21 sty 2026", deliveryAddress: "ul. Polna 8, Gdańsk",
-    amount: "246,00 zł", amountNum: 246, status: "Anulowane", notes: "Klient zrezygnował",
-    createdAt: "8 sty 2026", deliveryCost: 30, guestCount: 12, discount: 0,
-    items: [
-      { name: "Tacos z kurczakiem", quantity: 12, unit: "szt.", pricePerUnit: 18, total: 216, type: "simple", foodCostPerUnit: 6 },
-      { name: "Opakowanie jednorazowe", quantity: 1, unit: "szt.", pricePerUnit: 30, total: 30, type: "extra", foodCostPerUnit: 8 },
-    ],
-  },
-  {
-    id: "ZAM-KOC0MII", dbId: "", clientId: null, client: "Katarzyna Wójcik", email: "k.wojcik@email.pl", phone: "+48 500 999 000",
-    event: "Stypa", date: "26 sty 2026", deliveryAddress: "ul. Cicha 3, Warszawa",
-    amount: "402,00 zł", amountNum: 402, status: "Zrealizowane", notes: "",
-    createdAt: "12 sty 2026", deliveryCost: 0, guestCount: 15, discount: 0,
-    items: [
-      { name: "Patera Serów Europejskich", quantity: 1, unit: "szt.", pricePerUnit: 450, total: 450, type: "simple", foodCostPerUnit: 135,
-        subItems: [
-          { name: "Brie francuski", quantity: 150, unit: "g", foodCostPerUnit: 0.045 },
-          { name: "Camembert z ziołami", quantity: 150, unit: "g", foodCostPerUnit: 0.04 },
-          { name: "Gouda długo dojrzewająca", quantity: 200, unit: "g", foodCostPerUnit: 0.035 },
-          { name: "Roquefort", quantity: 100, unit: "g", foodCostPerUnit: 0.08 },
-          { name: "Winogrona", quantity: 200, unit: "g", foodCostPerUnit: 0.012 },
-          { name: "Orzechy włoskie", quantity: 100, unit: "g", foodCostPerUnit: 0.06 },
-          { name: "Miód akacjowy", quantity: 50, unit: "ml", foodCostPerUnit: 0.04 },
-        ]
-      },
-    ],
-  },
-  {
-    id: "ZAM-KOCX6J3", dbId: "", clientId: null, client: "Tomasz Kamiński", email: "t.kaminski@email.pl", phone: "+48 600 111 333",
-    event: "Impreza firmowa", date: "13 sty 2026", deliveryAddress: "Biurowiec Centrum, al. Jerozolimskie 100",
-    amount: "14 970,00 zł", amountNum: 14970, status: "Potwierdzone", notes: "Faktura na firmę",
-    createdAt: "2 sty 2026", deliveryCost: 120, guestCount: 100, discount: 0,
-    items: [
-      { name: "Zestaw nr 2 Premium", quantity: 100, unit: "os.", pricePerUnit: 95, total: 9500, type: "configurable", foodCostPerUnit: 32,
-        subItems: [
-          { name: "Polędwica wołowa z sosem z zielonym pieprzem", quantity: 100, unit: "os.", foodCostPerUnit: 12 },
-          { name: "Kaczka konfitowana z jabłkami", quantity: 100, unit: "os.", foodCostPerUnit: 10 },
-          { name: "Tatar z łososia z awokado", quantity: 100, unit: "os.", foodCostPerUnit: 6 },
-          { name: "Crème brûlée", quantity: 100, unit: "os.", foodCostPerUnit: 3 },
-          { name: "Panna cotta z malinami", quantity: 100, unit: "os.", foodCostPerUnit: 2.5 },
-        ]
-      },
-      { name: "Obsługa kelnerska 8h", quantity: 3, unit: "szt.", pricePerUnit: 450, total: 1350, type: "service" },
-      { name: "Patera Owoców Morza", quantity: 5, unit: "szt.", pricePerUnit: 680, total: 3400, type: "simple", foodCostPerUnit: 220,
-        subItems: [
-          { name: "Krewetki tygrysie", quantity: 1500, unit: "g", foodCostPerUnit: 0.09 },
-          { name: "Łosoś wędzony", quantity: 1000, unit: "g", foodCostPerUnit: 0.06 },
-          { name: "Tuńczyk sashimi", quantity: 750, unit: "g", foodCostPerUnit: 0.1 },
-          { name: "Kawior czerwony", quantity: 250, unit: "g", foodCostPerUnit: 0.25 },
-        ]
-      },
-      { name: "Dekoracja stołu", quantity: 5, unit: "szt.", pricePerUnit: 142, total: 710, type: "extra", foodCostPerUnit: 45 },
-    ],
-  },
-  {
-    id: "ZAM-KOC3UTX", dbId: "", clientId: null, client: "Agnieszka Lewandowska", email: "a.lew@email.pl", phone: "+48 700 222 444",
-    event: "Impreza firmowa", date: "20 sty 2026", deliveryAddress: "Hotel Marriott, Warszawa",
-    amount: "4 648,00 zł", amountNum: 4648, status: "W realizacji", notes: "",
-    createdAt: "6 sty 2026", deliveryCost: 0, guestCount: 50, discount: 0,
-    items: [
-      { name: "Zestaw nr 1 Klasyczny", quantity: 50, unit: "os.", pricePerUnit: 70, total: 3500, type: "configurable", foodCostPerUnit: 22,
-        subItems: [
-          { name: "Roladki z indyka ze szpinakiem", quantity: 50, unit: "os.", foodCostPerUnit: 8 },
-          { name: "Staropolski schabowy", quantity: 50, unit: "os.", foodCostPerUnit: 6 },
-          { name: "Ziemniaki opiekane z rozmarynem", quantity: 50, unit: "os.", foodCostPerUnit: 2 },
-          { name: "Ryż z warzywami", quantity: 50, unit: "os.", foodCostPerUnit: 1.5 },
-          { name: "Sałatka grecka", quantity: 50, unit: "os.", foodCostPerUnit: 3 },
-        ]
-      },
-      { name: "Patera Serów Europejskich", quantity: 2, unit: "szt.", pricePerUnit: 450, total: 900, type: "simple", foodCostPerUnit: 135 },
-      { name: "Opakowanie jednorazowe", quantity: 1, unit: "szt.", pricePerUnit: 248, total: 248, type: "extra", foodCostPerUnit: 60 },
-    ],
-  },
 ];
 
 // ===== DOCUMENT TYPES =====
@@ -1492,6 +1355,8 @@ const AddOrderSheet = ({ open, onClose, onAdd }: { open: boolean; onClose: () =>
   const [deliveryBuilding, setDeliveryBuilding] = useState("");
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [deliveryCost, setDeliveryCost] = useState(0);
+  const [deposit, setDeposit] = useState(0);
+  const [discount, setDiscount] = useState(0);
   const [deliveryDistanceKm, setDeliveryDistanceKm] = useState<number | null>(null);
   const [deliveryCalculating, setDeliveryCalculating] = useState(false);
   const [deliveryError, setDeliveryError] = useState<string | null>(null);
@@ -1613,7 +1478,7 @@ const AddOrderSheet = ({ open, onClose, onAdd }: { open: boolean; onClose: () =>
     setSelectedClientId(null);
     setClientName(""); setClientEmail(""); setClientPhone("");
   };
-
+  // TODO: add deposit logic here
   const addProduct = (product: CatalogProduct) => {
     if ((product.type === "bundle" && product.variants && product.variants.length > 0) ||
         (product.type === "configurable" && product.optionGroups && product.optionGroups.length > 0)) {
@@ -1671,9 +1536,11 @@ const AddOrderSheet = ({ open, onClose, onAdd }: { open: boolean; onClose: () =>
       dbId: "", clientId: selectedClientId,
       client: clientName, email: clientEmail, phone: clientPhone,
       event, date: date || dateStr, deliveryAddress: cateringType === "na_sali" ? "Na sali" : (deliveryAddress || `${deliveryStreet} ${deliveryBuilding}, ${deliveryCity}`), notes, items,
-      amount: fmtNum(totalAmount + effectiveDeliveryCost) + " zł", amountNum: totalAmount + effectiveDeliveryCost,
+      amount: fmtNum(totalAmount + effectiveDeliveryCost - deposit - discount) + " zł", amountNum: totalAmount + effectiveDeliveryCost - deposit - discount,
       status: "Nowe zamówienie", createdAt: dateStr,
-      deliveryCost: effectiveDeliveryCost, guestCount: 0, discount: 0,
+      deliveryCost: effectiveDeliveryCost, guestCount: 0, discount: 0, 
+      // TODO: add deposit logic here
+      deposit: 0,
     };
 
     onAdd(newOrder);
@@ -2044,6 +1911,7 @@ const OrdersView = () => {
           deliveryCost: Number(o.deliveryCost ?? 0) || 0,
           guestCount: Number(o.guestCount ?? 0) || 0,
           discount: Number(o.discount ?? 0) || 0,
+          deposit: Number(o.deposit ?? 0) || 0,
         };
       });
 
@@ -2114,6 +1982,7 @@ const OrdersView = () => {
           deliveryAddress: updated.deliveryAddress,
           amount: updated.amountNum,
           discount: updated.discount,
+          deposit: updated.deposit,
           orderItems: updated.items.map((item) => ({
             name: item.name,
             quantity: item.quantity,
@@ -2134,6 +2003,17 @@ const OrdersView = () => {
       } catch {
         toast.error("Błąd zapisu zamówienia");
       }
+    }
+  };
+  const handleDeleteOrder = async (orderId: string) => {
+    try {
+      console.log("orderId", orderId);
+      await api.deleteAdminOrder(orderId);
+    
+      await fetchOrders();
+      toast.success("Zamówienie usunięte");
+    } catch {
+      toast.error("Błąd usuwania zamówienia");
     }
   };
 
@@ -2240,7 +2120,7 @@ const OrdersView = () => {
                     <button onClick={() => openEdit(order)} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
                       <Pencil className="w-4 h-4" />
                     </button>
-                    <button className="p-1.5 rounded-md text-destructive/60 hover:text-destructive hover:bg-destructive/10 transition-colors">
+                    <button onClick={() => handleDeleteOrder(order.dbId)} className="p-1.5 rounded-md text-destructive/60 hover:text-destructive hover:bg-destructive/10 transition-colors">
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>

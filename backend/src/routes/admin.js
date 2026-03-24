@@ -235,17 +235,14 @@ router.get("/orders/:id", async (req, res) => {
 /** PATCH /api/admin/orders/:id */
 router.patch("/orders/:id", requireCsrf, async (req, res) => {
   const id = req.params.id;
-  const b = req.body ?? {};
-  const data = {};
-
+  const {orderItems, orderFoodCostExtras, ...data} = req.body;
   if (Object.keys(data).length > 0) {
     await prisma.order.update({ where: { id }, data });
   }
-
-  if (Array.isArray(b.orderItems)) {
+  if (Array.isArray(orderItems)) {
     await prisma.orderItem.deleteMany({ where: { orderId: id } });
-    for (let i = 0; i < b.orderItems.length; i++) {
-      const it = b.orderItems[i];
+    for (let i = 0; i < orderItems.length; i++) {
+      const it = orderItems[i];
       const created = await prisma.orderItem.create({
         data: {
           orderId: id,
@@ -279,11 +276,11 @@ router.patch("/orders/:id", requireCsrf, async (req, res) => {
     }
   }
 
-  if (Array.isArray(b.orderFoodCostExtras)) {
+  if (Array.isArray(orderFoodCostExtras)) {
     await prisma.orderFoodCostExtra.deleteMany({ where: { orderId: id } });
-    if (b.orderFoodCostExtras.length > 0) {
+    if (orderFoodCostExtras.length > 0) {
       await prisma.orderFoodCostExtra.createMany({
-        data: b.orderFoodCostExtras.map((e) => ({
+        data: orderFoodCostExtras.map((e) => ({
           orderId: id,
           name: String(e.name),
           amount: Number(e.amount) ?? 0,
@@ -301,6 +298,29 @@ router.patch("/orders/:id", requireCsrf, async (req, res) => {
     },
   });
   res.json(updated);
+});
+
+/** DELETE /api/admin/orders/:id */
+router.delete("/orders/:id", requireCsrf, async (req, res) => {
+  const id = req.params.id;
+
+  const existing = await prisma.order.findUnique({
+    where: { id },
+    select: { id: true },
+  });
+  if (!existing) return res.status(404).json({ error: "Not found" });
+
+  await prisma.$transaction(async (tx) => {
+    // Fallback for environments where FK cascade could be missing/misaligned.
+    await tx.orderItemSubItem.deleteMany({
+      where: { orderItem: { orderId: id } },
+    });
+    await tx.orderItem.deleteMany({ where: { orderId: id } });
+    await tx.orderFoodCostExtra.deleteMany({ where: { orderId: id } });
+    await tx.order.delete({ where: { id } });
+  });
+
+  return res.status(204).send();
 });
 
 // ─── Catalog (dishes, bundles, sets, extras for admin) ─────────────────

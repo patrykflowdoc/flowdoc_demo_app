@@ -55,6 +55,7 @@ export const AdminOrderSchema = z
     deliveryCost: DecimalJson.default(0),
     guestCount: DecimalJson.default(0),
     discount: DecimalJson.default(0),
+    deposit: DecimalJson.default(0),
     orderItems: z.array(AdminOrderItemSchema).nullable().default([]),
     orderFoodCostExtras: z.array(AdminFoodCostExtraSchema).nullable().default([]),
   })
