@@ -203,25 +203,24 @@ router.get("/extras", async (_req, res) => {
         unitLabel: e.unitLabel ?? "szt.",
       });
     }
-    // } else if (e.category === "pakowanie") {
-    //   packagingOptions.push({
-    //     ...base,
-    //     priceLabel: e.priceLabel ?? (toNum(e.price) === 0 ? "W cenie" : `${e.price} zł/os.`),
-    //     requiresPersonCount: e.requiresPersonCount ?? false,
-    //   });
-    // } else if (e.category === "obsluga") {
-    //   waiterServiceOptions.push({
-    //     ...base,
-    //     duration: e.duration ?? "4h",
-    //   });
-    // }
+    else if (e.category === "pakowanie") {
+      packagingOptions.push({
+        ...base,
+        priceLabel: e.priceLabel ?? (toNum(e.price) === 0 ? "W cenie" : `${e.price} zł/os.`),
+        requiresPersonCount: e.requiresPersonCount ?? false,
+      });
+    } else if (e.category === "obsluga") {
+      waiterServiceOptions.push({
+        ...base,
+        duration: e.duration ?? "4h",
+      });
+    }
   }
 
   const bundleRows = await prisma.extraBundle.findMany({
-    include: { extraBundleVariants: { orderBy: { sortOrder: "asc" } } },
+    include: { extraBundleVariants: { include: { extra: true }, orderBy: { sortOrder: "asc" } } },
     orderBy: { name: "asc" },
   });
-  console.log("bundleRows", bundleRows?.extraBundleVariants);
   const extraBundles = bundleRows.map((b) => {
     const variants = (b.extraBundleVariants ?? []).map((v) => ({
       id: v.id,
@@ -230,7 +229,10 @@ router.get("/extras", async (_req, res) => {
       price: toNum(v.price) ?? 0,
       priceOnSite: toNum(v.priceOnSite),
       contents: v.contents ?? [],
-      bail: toNum(v.bail),
+      extra: {
+        id: v.extra.id,
+        bail: toNum(v.extra.bail)
+      },
     }));
     return {
       type: "expandable",
@@ -247,7 +249,7 @@ router.get("/extras", async (_req, res) => {
   });
 
   res.json({ extraItems, 
-    // packagingOptions, waiterServiceOptions, 
+    packagingOptions, waiterServiceOptions, 
     extraBundles });
 });
 

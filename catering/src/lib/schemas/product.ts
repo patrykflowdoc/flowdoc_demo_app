@@ -7,8 +7,8 @@ export const GroupOptionSchema = z.object({
   dietaryTags: z.array(z.string()),
   dish: z.object({
     id: z.string(),
-    bail: z.number().nullable().optional(),
-  }).optional(),
+    bail: z.number(),
+  }),
 });
 
 export const OptionGroupSchema = z.object({
@@ -29,8 +29,8 @@ export const ProductVariantSchema = z.object({
   dietaryTags: z.array(z.string()),
   dish: z.object({
     id: z.string(),
-    bail: z.number().nullable().optional(),
-  }).optional(),
+    bail: z.number(),
+  }),
 });
 
 export const SimpleProductSchema = z.object({
@@ -48,7 +48,7 @@ export const SimpleProductSchema = z.object({
   unitLabel: z.string(),
   minQuantity: z.number(),
   category: z.string(),
-  bail: z.number().nullable().optional(),
+  bail: z.number(),
 });
 
 export const ExpandableProductSchema = z.object({

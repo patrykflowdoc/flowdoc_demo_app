@@ -41,6 +41,7 @@ export type CateringOrder = {
   paymentMethod: string;
   deliveryZoneId: string | null;
   deliveryPrice: number;
+  bail: number;
 };
 
 const initialOrder: CateringOrder = {
@@ -73,7 +74,8 @@ const initialOrder: CateringOrder = {
   notes: "",
   paymentMethod: "",
   deliveryZoneId: null,
-  deliveryPrice: 0,
+  deliveryPrice: 0, 
+  bail: 0,
 };
 
 export function useCateringOrder(
@@ -171,6 +173,7 @@ export function useCateringOrder(
     }
     // Delivery cost
     total += order.deliveryPrice;
+
     
     return total;
   }, [order.cateringType, order.simpleQuantities, order.expandableQuantities, order.configurableData, order.selectedExtras, order.selectedExpandableExtras, order.selectedPackaging, order.packagingPersonCount, order.selectedWaiterService, order.waiterCount, order.deliveryPrice, products, extraItems, packagingOptionsList, waiterServiceOptionsList, extraBundles]);

@@ -7,7 +7,7 @@ import {
 import type { Product, Category, EventType } from "@/data/products";
 import type { ExtraItem, PackagingOption, WaiterServiceOption, PaymentMethod, ExpandableExtra } from "@/data/extras";
 import type { CateringOrder } from "@/hooks/useCateringOrder";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import * as api from "@/api/client";
 import { Separator } from "@/components/ui/separator";
@@ -20,6 +20,7 @@ type OrderSummaryProps = {
   onSubmit: (submissionType: "order" | "offer") => Promise<{ orderId: string; orderNumber: string } | void>;
   onResetOrder: () => void;
   onSimpleQuantityChange: (productId: string, quantity: number) => void;
+  onBailChange: (bail: number) => void
   onExpandableVariantChange: (productId: string, variantId: string, quantity: number) => void;
   onConfigurableChange: (productId: string, quantity: number, groupId?: string, optionIds?: string[]) => void;
   products: Product[];
@@ -36,13 +37,18 @@ type OrderSummaryProps = {
 export function OrderSummary({ 
   order, totalPrice, onSubmit, onResetOrder,
   products, eventTypes, extraItems, packagingOptions, waiterServiceOptions, extraBundles,
+  onBailChange,
   minOrderValue = 0,
+  
 }: OrderSummaryProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [privacyPolicyUrl, setPrivacyPolicyUrl] = useState<string | null>(null);
   const { toast } = useToast();
+
+
+ 
 
   useEffect(() => {
     api.getCompanySettings()
@@ -54,19 +60,21 @@ export function OrderSummary({
   const eventType = eventTypes.find((e) => e.id === order.eventType);
 
   // Build ordered items list
-  type SummaryLine = { name: string; quantity: number; price: number; note?: string; time?: string };
+  type SummaryLine = { name: string; quantity: number; price: number; note?: string; time?: string; bail?: number };
   const productLines: SummaryLine[] = [];
 
   for (const [productId, qty] of Object.entries(order.simpleQuantities)) {
     if (qty > 0) {
       const product = products.find(p => p.id === productId);
       if (product && product.type === "simple") {
+        // console.log("product", product);
         productLines.push({
           name: product.name,
           quantity: qty,
           price: getSimplePrice(product, ct) * qty,
           note: order.productNotes[productId] || undefined,
           time: order.servingTimes[productId] || undefined,
+          bail: product.bail,
         });
       }
     }
@@ -85,6 +93,7 @@ export function OrderSummary({
               price: getVariantPrice(variant, ct) * qty,
               note: order.productNotes[productId] || undefined,
               time: order.servingTimes[productId] || undefined,
+              bail: variant.dish?.bail,
             });
           }
         }
@@ -102,10 +111,21 @@ export function OrderSummary({
           price: getConfigurablePrice(product, ct) * data.quantity,
           note: order.productNotes[productId] || undefined,
           time: order.servingTimes[productId] || undefined,
-        });
-      }
+          bail: Math.max(
+            0,
+            ...product.optionGroups.flatMap((group) => {
+              const selectedIds = data.options[group.id] ?? [];
+              return group.options
+                .filter((opt) => selectedIds.includes(opt.id))
+                .map((opt) => opt.dish?.bail ?? 0);
+            })
+          ),
+      });
     }
   }
+  }
+
+  console.log("productLines", productLines);
 
   // Sort by serving time (earliest first), items without time go last
   productLines.sort((a, b) => {
@@ -120,7 +140,12 @@ export function OrderSummary({
   for (const [extraId, qty] of Object.entries(order.selectedExtras)) {
     if (qty > 0) {
       const extra = extraItems.find(e => e.id === extraId);
-      if (extra) extrasLines.push({ name: extra.name, quantity: qty, price: getExtraPrice(extra, ct) * qty });
+      if (extra) extrasLines.push({
+        name: extra.name,
+        quantity: qty,
+        price: getExtraPrice(extra, ct) * qty,
+        bail: extra.bail,
+      });
     }
   }
 
@@ -133,13 +158,17 @@ export function OrderSummary({
           const variant = bundle.variants.find(v => v.id === variantId);
           if (variant) {
             const variantPrice = ct === "na_sali" && variant.priceOnSite != null ? variant.priceOnSite : variant.price;
-            extrasLines.push({ name: `${bundle.name}: ${variant.name}`, quantity: qty, price: variantPrice * qty });
+            extrasLines.push({
+              name: `${bundle.name}: ${variant.name}`,
+              quantity: qty,
+              price: variantPrice * qty,
+              bail: variant.extra?.bail,
+            });
           }
         }
       }
     }
   }
-
   const selectedPkg = packagingOptions.find(p => p.id === order.selectedPackaging);
   if (selectedPkg && getPackagingPrice(selectedPkg, ct) > 0) {
     extrasLines.push({ name: selectedPkg.name, quantity: order.packagingPersonCount, price: getPackagingPrice(selectedPkg, ct) * order.packagingPersonCount });
@@ -149,6 +178,16 @@ export function OrderSummary({
   if (selectedService) {
     extrasLines.push({ name: selectedService.name, quantity: order.waiterCount, price: getWaiterPrice(selectedService, ct) * order.waiterCount });
   }
+
+  const bailValue = useMemo(() => {
+    const pBail = Math.max(0, ...productLines.map(line => line.bail ?? 0));
+    const eBail = Math.max(0, ...extrasLines.map(line => line.bail ?? 0));
+    return Math.max(0, pBail + eBail);
+  }, [productLines, extrasLines]);
+
+  useEffect(() => {
+    onBailChange(bailValue);
+  }, [bailValue, onBailChange]);
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return "Do ustalenia";
@@ -293,6 +332,8 @@ export function OrderSummary({
 
       {/* Product lines */}
       {productLines.length > 0 && (
+        <>
+        <p className="text-sm font-semibold text-foreground mb-2">Produkty</p>
         <div className="space-y-3 mb-6">
           {productLines.map((line, idx) => (
             <div key={idx}>
@@ -317,12 +358,14 @@ export function OrderSummary({
             </div>
           ))}
         </div>
+        </>
       )}
 
       {/* Extras */}
       {extrasLines.length > 0 && (
         <>
           <Separator className="mb-4" />
+          <p className="text-sm font-semibold text-foreground mb-2">Dodatki</p>
           <div className="space-y-2 mb-6">
             {extrasLines.map((line, idx) => (
               <div key={idx} className="flex items-baseline justify-between text-sm">
@@ -337,7 +380,21 @@ export function OrderSummary({
           </div>
         </>
       )}
-
+      {/* Bail */}
+      {bailValue > 0 && (
+        <>
+        <Separator className="my-4" />
+        <div className="flex items-baseline justify-between text-sm mb-2">
+          <span className="text-muted-foreground flex items-center gap-1.5">
+            {/* <Money className="w-4 h-4" /> */}
+            Kaucja: 
+          </span>
+          <span className="font-medium text-foreground tabular-nums ml-4 shrink-0">
+            {bailValue.toFixed(2)} zł
+          </span>
+        </div>
+        </>
+      )}
       {/* Delivery */}
       {order.deliveryPrice > 0 && (
         <div className="flex items-baseline justify-between text-sm mb-2">
@@ -359,8 +416,8 @@ export function OrderSummary({
           <span className="font-bold text-foreground text-lg tabular-nums">{totalPrice.toFixed(2)} zł</span>
         </div>
         <div className="flex items-baseline justify-between">
-          <span className="font-semibold text-foreground">Kaucja</span>
-          <span className="font-bold text-foreground text-lg tabular-nums">{(totalPrice * 0.10).toFixed(2)} zł</span>
+          <span className="font-semibold text-foreground">Zaliczka</span>
+          <span className="font-bold text-foreground text-lg tabular-nums">{((totalPrice * 0.1)).toFixed(2)} zł</span>
         </div>
         {order.guestCount > 0 && (
           <div className="flex items-baseline justify-between text-sm">
@@ -416,7 +473,7 @@ export function OrderSummary({
           className="h-14 text-base"
         >
           <CreditCard className="w-5 h-5 mr-2" />
-          Zapłać kaucje online
+          Zapłać zaliczkę online
         </Button>
         <Button
           size="lg"

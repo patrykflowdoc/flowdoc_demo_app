@@ -30,7 +30,6 @@ export function CateringWizard() {
     eventExtrasCategoryMappings: eventExtrasCategoryMappingsRaw,
     orderConfig,
   } = useAppData();
-  console.log("productsRaw", productsRaw);
   const products = (productsRaw ?? []) as Product[];
   const categories = (categoriesRaw ?? []) as Category[];
   const eventTypes = (eventTypesRaw ?? []) as { id: string; name: string }[];
@@ -99,6 +98,9 @@ export function CateringWizard() {
     [filteredExtrasCategories]
   );
 
+   /**
+    * Update allowed categories when extras categories change
+    */
   useEffect(() => {
     const allowedExtraIds = new Set(
       extraItemsTyped
@@ -164,6 +166,7 @@ export function CateringWizard() {
     allowedExtrasCategoryIds,
     updateOrder,
   ]);
+
 
   const handleSubmit = async (submissionType: SubmissionType = "offer") => {
     return submitOrder(
@@ -356,6 +359,7 @@ export function CateringWizard() {
             onSimpleQuantityChange={updateSimpleQuantity}
             onExpandableVariantChange={updateExpandableVariant}
             onConfigurableChange={updateConfigurable}
+            onBailChange={(bail) => updateOrder({ bail: bail })}
             products={products}
             categories={categories}
             eventTypes={eventTypes}

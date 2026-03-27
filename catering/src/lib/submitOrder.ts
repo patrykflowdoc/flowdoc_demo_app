@@ -190,6 +190,8 @@ export async function submitOrder(
       });
     }
   }
+  // TODO: czy doliczamy kaucje do zaliczki?
+  const bail = order.bail;
   const deposit = Number(((totalPrice + order.deliveryPrice) * 0.1).toFixed(2));
   const payload = {
     order: {
@@ -208,6 +210,7 @@ export async function submitOrder(
       paymentMethod: order.paymentMethod,
       notes: order.notes || "",
       deposit: deposit,
+      bail: bail,
     },
     totalPrice,
     orderItems,

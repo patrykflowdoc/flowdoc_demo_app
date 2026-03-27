@@ -184,6 +184,7 @@ export interface SubmitOrderPayload {
     deliveryZoneId?: string | null;
     deliveryPrice?: number;
     paymentMethod?: string;
+    bail?: number;
     notes?: string;
   };
   totalPrice: number;

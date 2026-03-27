@@ -418,6 +418,7 @@ model Order {
   discount         Decimal   @default(0)
   deposit          Decimal   @default(0)
   amount           Decimal   @default(0)
+  bail             Decimal   @default(0)
   status           String    @default("Nowe")
   paymentMethod    String?
   notes            String?

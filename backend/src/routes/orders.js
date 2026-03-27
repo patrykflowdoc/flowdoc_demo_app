@@ -31,6 +31,7 @@ router.post("/", async (req, res) => {
       });
       if (existing) clientId = existing.id;
     }
+    console.log("bail", order.bail);
     const status = submissionType === "order" ? "Nowe zamówienie" : "Nowa oferta";
     const deliveryAddress = [
       order.contactStreet,
@@ -64,6 +65,7 @@ router.post("/", async (req, res) => {
         paymentMethod: order.paymentMethod ?? "",
         notes: order.notes ?? "",
         deposit: order.deposit,
+        bail: order.bail,
       },
     });
 
