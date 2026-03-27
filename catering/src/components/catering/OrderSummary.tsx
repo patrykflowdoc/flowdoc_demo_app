@@ -192,14 +192,12 @@ export function OrderSummary({
 
       const checkoutData = await api.createStripeCheckout({
         orderId,
-        orderNumber,
-        amount: totalPrice,
         customerEmail: order.contactEmail,
         customerName: order.contactName,
-        lineItems: stripeLineItems,
         successUrl: `${window.location.origin}?payment=success&order=${orderNumber}`,
         cancelUrl: `${window.location.origin}?payment=cancelled&order=${orderNumber}`,
       });
+      
 
       if (checkoutData?.url) {
         window.location.href = checkoutData.url;
@@ -360,6 +358,10 @@ export function OrderSummary({
           <span className="font-semibold text-foreground">Razem</span>
           <span className="font-bold text-foreground text-lg tabular-nums">{totalPrice.toFixed(2)} zł</span>
         </div>
+        <div className="flex items-baseline justify-between">
+          <span className="font-semibold text-foreground">Kaucja</span>
+          <span className="font-bold text-foreground text-lg tabular-nums">{(totalPrice * 0.10).toFixed(2)} zł</span>
+        </div>
         {order.guestCount > 0 && (
           <div className="flex items-baseline justify-between text-sm">
             <span className="text-muted-foreground">Na osobę</span>
@@ -414,7 +416,7 @@ export function OrderSummary({
           className="h-14 text-base"
         >
           <CreditCard className="w-5 h-5 mr-2" />
-          Zapłać online
+          Zapłać kaucje online
         </Button>
         <Button
           size="lg"

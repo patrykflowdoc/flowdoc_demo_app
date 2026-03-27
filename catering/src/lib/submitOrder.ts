@@ -190,7 +190,7 @@ export async function submitOrder(
       });
     }
   }
-
+  const deposit = Number(((totalPrice + order.deliveryPrice) * 0.1).toFixed(2));
   const payload = {
     order: {
       contactName: order.contactName,
@@ -207,12 +207,12 @@ export async function submitOrder(
       deliveryPrice: order.deliveryPrice ?? 0,
       paymentMethod: order.paymentMethod,
       notes: order.notes || "",
+      deposit: deposit,
     },
     totalPrice,
     orderItems,
     submissionType,
   };
-
   const result = await apiSubmitOrder(payload);
   return { orderId: result.orderId, orderNumber: result.orderNumber };
 }

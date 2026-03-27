@@ -230,11 +230,8 @@ export async function calculateDelivery(params: {
 
 export async function createStripeCheckout(params: {
   orderId: string;
-  orderNumber: string;
-  amount: number;
-  customerEmail: string;
+  customerEmail?: string;
   customerName?: string;
-  lineItems: Array<{ name: string; quantity: number; unitPrice: number }>;
   successUrl?: string;
   cancelUrl?: string;
 }): Promise<{ url: string; sessionId: string }> {

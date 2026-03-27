@@ -76,8 +76,8 @@ export function EventDetails({
         <CardContent>
           <div className="grid grid-cols-2 gap-3">
             {([
-              { id: "wyjazdowy" as CateringType, label: "Catering wyjazdowy", icon: Truck, desc: "Dowozimy na wskazany adres" },
-              { id: "na_sali" as CateringType, label: "Catering na sali", icon: Building2, desc: "Obsługa w naszej sali" },
+              { id: "wyjazdowy" as CateringType, label: "Catering", icon: Truck, desc: "Dowozimy na wskazany adres" },
+              { id: "na_sali" as CateringType, label: "Uroczystość na sali", icon: Building2, desc: "Obsługa w naszej sali" },
             ]).map((option) => {
               const isSelected = cateringType === option.id;
               const Icon = option.icon;

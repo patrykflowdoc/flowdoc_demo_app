@@ -1,4 +1,4 @@
-import { useState, type ComponentProps } from "react";
+import { useEffect, useState, type ComponentProps } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -6,11 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Lock } from "lucide-react";
+import { getCompanySettings } from "@/api/client";
 
 const Login = () => {
   const [loginValue, setLoginValue] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [companyName, setCompanyName] = useState("");
   const { login } = useAuth();
   const navigate = useNavigate();
 
@@ -24,7 +26,13 @@ const Login = () => {
       setError("Nieprawidłowy login lub hasło");
     }
   };
-
+  useEffect(() => {
+    getCompanySettings()
+      .then((data: Record<string, unknown>) => {
+        if (data.companyName) setCompanyName(String(data.companyName));
+      })
+      .catch(() => {});
+  }, []);
   return (
     <div className="min-h-screen bg-muted flex items-center justify-center p-4">
       <Card className="w-full max-w-sm">
@@ -32,8 +40,8 @@ const Login = () => {
           <div className="mx-auto w-12 h-12 rounded-xl bg-primary flex items-center justify-center">
             <Lock className="w-6 h-6 text-primary-foreground" />
           </div>
-          <CardTitle className="text-xl">Panel administracyjny</CardTitle>
-          <p className="text-sm text-muted-foreground">King of Catering</p>
+          <CardTitle className="text-xl">{companyName}</CardTitle>
+          <p className="text-sm text-muted-foreground">Panel administracyjny</p>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">

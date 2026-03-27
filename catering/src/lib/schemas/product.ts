@@ -5,6 +5,10 @@ export const GroupOptionSchema = z.object({
   name: z.string(),
   allergens: z.array(z.string()),
   dietaryTags: z.array(z.string()),
+  dish: z.object({
+    id: z.string(),
+    bail: z.number().nullable().optional(),
+  }).optional(),
 });
 
 export const OptionGroupSchema = z.object({
@@ -23,6 +27,10 @@ export const ProductVariantSchema = z.object({
   priceOnSite: z.number().nullable().optional(),
   allergens: z.array(z.string()),
   dietaryTags: z.array(z.string()),
+  dish: z.object({
+    id: z.string(),
+    bail: z.number().nullable().optional(),
+  }).optional(),
 });
 
 export const SimpleProductSchema = z.object({
@@ -40,6 +48,7 @@ export const SimpleProductSchema = z.object({
   unitLabel: z.string(),
   minQuantity: z.number(),
   category: z.string(),
+  bail: z.number().nullable().optional(),
 });
 
 export const ExpandableProductSchema = z.object({

@@ -1536,12 +1536,10 @@ const AddOrderSheet = ({ open, onClose, onAdd }: { open: boolean; onClose: () =>
       dbId: "", clientId: selectedClientId,
       client: clientName, email: clientEmail, phone: clientPhone,
       event, date: date || dateStr, deliveryAddress: cateringType === "na_sali" ? "Na sali" : (deliveryAddress || `${deliveryStreet} ${deliveryBuilding}, ${deliveryCity}`), notes, items,
-      // TODO: add deposit logic here
       amount: fmtNum(totalAmount + effectiveDeliveryCost) + " zł", amountNum: totalAmount + effectiveDeliveryCost,
       status: "Nowe zamówienie", createdAt: dateStr,
       deliveryCost: effectiveDeliveryCost, guestCount: 0, discount: 0, 
-      // TODO: add deposit logic here
-      deposit: 0,
+      deposit: (totalAmount + effectiveDeliveryCost) * 0.1,
     };
 
     onAdd(newOrder);

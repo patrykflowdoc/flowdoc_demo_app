@@ -20,11 +20,9 @@ router.post("/", async (req, res) => {
     if (!order || totalPrice == null || !Array.isArray(orderItems)) {
       return res.status(400).json({ error: "Missing order, totalPrice, or orderItems" });
     }
-
     const now = new Date();
-    const orderNumber =
-      `KC-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}${String(now.getSeconds()).padStart(2, "0")}`;
-
+  
+    const orderNumber = `KC-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}${String(now.getSeconds()).padStart(2, "0")}`; 
     let clientId = null;
     if (order.contactEmail) {
       const existing = await prisma.client.findFirst({
@@ -33,7 +31,6 @@ router.post("/", async (req, res) => {
       });
       if (existing) clientId = existing.id;
     }
-
     const status = submissionType === "order" ? "Nowe zamówienie" : "Nowa oferta";
     const deliveryAddress = [
       order.contactStreet,
@@ -66,6 +63,7 @@ router.post("/", async (req, res) => {
         deliveryCost: Number(order.deliveryPrice ?? 0),
         paymentMethod: order.paymentMethod ?? "",
         notes: order.notes ?? "",
+        deposit: order.deposit,
       },
     });
 

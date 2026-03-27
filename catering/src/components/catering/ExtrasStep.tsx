@@ -227,7 +227,7 @@ export function ExtrasStep({
                     <div className="flex-1 min-w-0">
                       <h3 className="font-semibold text-foreground text-sm">{extra.name}</h3>
                       <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-sm font-bold text-primary">{extra.price.toFixed(0)} zł / {extra.unitLabel}</span>
+                        <span className="text-sm font-bold text-primary">{extra.price.toFixed(2)} zł / {extra.unitLabel}</span>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
@@ -278,7 +278,7 @@ export function ExtrasStep({
                     <div className="flex-1 min-w-0">
                       <h3 className="font-semibold text-foreground text-sm">{option.name}</h3>
                       <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-sm font-bold text-primary">{option.price.toFixed(0)} zł / {option.duration}</span>
+                        <span className="text-sm font-bold text-primary">{option.price.toFixed(2)} zł / {option.duration}</span>
                       </div>
                     </div>
                     <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
@@ -295,8 +295,8 @@ export function ExtrasStep({
             const isSelected = totalSelected > 0;
             const hasImage = bundle.image;
             const priceRange = bundle.variants.length > 0
-              ? `od ${Math.min(...bundle.variants.map(v => v.price)).toFixed(0)} zł`
-              : `${bundle.basePrice.toFixed(0)} zł`;
+              ? `od ${Math.min(...bundle.variants.map(v => v.price)).toFixed(2)} zł`
+              : `${bundle.basePrice.toFixed(2)} zł`;
             return (
               <Card key={bundle.id} onClick={() => setSelectedExtraBundle(bundle)} className={cn("cursor-pointer transition-all duration-200 hover:shadow-md active:scale-[0.99] overflow-hidden", isSelected && "ring-2 ring-primary")}>
                 <CardContent className="p-3">
@@ -385,7 +385,7 @@ function ExtraItemModal({ item, isOpen, onClose, quantity, onQuantityChange }: {
               {item.longDescription && <p className="text-sm text-muted-foreground mt-2">{item.longDescription}</p>}
             </div>
             <div className="flex items-center justify-between p-4 bg-accent rounded-xl">
-              <div><span className="text-2xl font-bold">{item.price.toFixed(0)} zł</span><span className="text-muted-foreground ml-1">/ {item.unitLabel}</span></div>
+              <div><span className="text-2xl font-bold">{item.price.toFixed(2)} zł</span><span className="text-muted-foreground ml-1">/ {item.unitLabel}</span></div>
               <QuantityInput value={quantity} onChange={onQuantityChange} />
             </div>
             {item.contents && item.contents.length > 0 && (
@@ -477,7 +477,7 @@ function WaiterServiceModal({ option, isOpen, onClose, isSelected, waiterCount, 
             </div>
             <div className="p-4 bg-accent rounded-xl space-y-3">
               <div className="flex items-center justify-between">
-                <div><span className="text-2xl font-bold">{option.price.toFixed(0)} zł</span><span className="text-muted-foreground ml-1">/ kelner ({option.duration})</span></div>
+                <div><span className="text-2xl font-bold">{option.price.toFixed(2)} zł</span><span className="text-muted-foreground ml-1">/ kelner ({option.duration})</span></div>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Liczba kelnerów:</span>
@@ -485,7 +485,7 @@ function WaiterServiceModal({ option, isOpen, onClose, isSelected, waiterCount, 
               </div>
               <div className="pt-2 border-t border-border flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Suma:</span>
-                <span className="text-lg font-bold text-primary">{(option.price * count).toFixed(0)} zł</span>
+                <span className="text-lg font-bold text-primary">{(option.price * count).toFixed(2)} zł</span>
               </div>
             </div>
             {option.contents && option.contents.length > 0 && (
@@ -547,7 +547,7 @@ function ExtraBundleModal({ bundle, isOpen, onClose, selectedVariants, onVariant
                     <div className="flex-1">
                       <p className="font-medium text-sm">{variant.name}</p>
                       {variant.description && <p className="text-xs text-muted-foreground">{variant.description}</p>}
-                      <p className="text-sm font-bold text-primary mt-1">{variant.price.toFixed(0)} zł</p>
+                      <p className="text-sm font-bold text-primary mt-1">{variant.price.toFixed(2)} zł</p>
                     </div>
                     <QuantityInput value={qty} onChange={(v) => onVariantChange(variant.id, Math.max(0, v))} min={0} size="sm" />
                   </div>
@@ -559,7 +559,7 @@ function ExtraBundleModal({ bundle, isOpen, onClose, selectedVariants, onVariant
               <div className="p-4 bg-accent rounded-xl">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Wybrano {totalSelected} wariantów</span>
-                  <span className="text-lg font-bold text-primary">{totalPrice.toFixed(0)} zł</span>
+                  <span className="text-lg font-bold text-primary">{totalPrice.toFixed(2)} zł</span>
                 </div>
               </div>
             )}

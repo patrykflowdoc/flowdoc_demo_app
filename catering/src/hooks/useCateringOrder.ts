@@ -265,7 +265,7 @@ export function useCateringOrder(
 
   const getSuggestedQuantity = useCallback(
     (product: Product): number => {
-      if (product.type === "simple") return Math.max(1, Math.ceil(order.guestCount / 8));
+      if (product.type === "simple") return Math.max(1, Math.ceil(order.guestCount / 8)); // TODO: 
       if (product.type === "expandable") return product.minQuantity;
       if (product.type === "configurable") return Math.max(product.minPersons, order.guestCount);
       return 1;

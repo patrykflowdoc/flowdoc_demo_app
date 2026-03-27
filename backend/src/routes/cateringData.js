@@ -53,14 +53,22 @@ router.get("/products", async (_req, res) => {
   const [dishes, bundles, sets] = await Promise.all([
     prisma.dish.findMany({ orderBy: { createdAt: "asc" } }),
     prisma.bundle.findMany({
-      include: { bundleVariants: { orderBy: { sortOrder: "asc" } } },
+      include: { bundleVariants: { 
+        include: {
+          dish: true,
+        },
+        orderBy: { sortOrder: "asc" } } },
       orderBy: { createdAt: "asc" },
     }),
     prisma.configurableSet.findMany({
       include: {
         configGroups: {
           include: {
-            options: { orderBy: { sortOrder: "asc" } },
+            options: { 
+              include: {
+                dish: true,
+              },
+              orderBy: { sortOrder: "asc" } },
           },
           orderBy: { sortOrder: "asc" },
         },
@@ -68,7 +76,6 @@ router.get("/products", async (_req, res) => {
       orderBy: { createdAt: "asc" },
     }),
   ]);
-
   const products = [];
 
   for (const d of dishes) {
@@ -87,10 +94,11 @@ router.get("/products", async (_req, res) => {
       unitLabel: d.unitLabel ?? "szt.",
       minQuantity: d.minQuantity ?? 1,
       category: d.categorySlug ?? "patery",
+      bail: toNum(d.bail),
     });
   }
 
-  for (const b of bundles) {
+  await Promise.all(bundles.map(async (b) => {
     const variants = (b.bundleVariants ?? []).map((v) => ({
       id: v.id,
       name: v.name,
@@ -99,6 +107,10 @@ router.get("/products", async (_req, res) => {
       priceOnSite: toNum(v.priceOnSite),
       allergens: v.allergens ?? [],
       dietaryTags: v.dietaryTags ?? [],
+      dish: {
+        id: v.dish.id,
+        bail: toNum(v.dish.bail)
+      },
     }));
     products.push({
       type: "expandable",
@@ -113,9 +125,9 @@ router.get("/products", async (_req, res) => {
       dietaryTags: b.dietaryTags ?? [],
       variants,
     });
-  }
+  }));
 
-  for (const s of sets) {
+  await Promise.all(sets.map(async (s) => {
     const optionGroups = (s.configGroups ?? []).map((g) => ({
       id: g.id,
       name: g.name,
@@ -126,6 +138,10 @@ router.get("/products", async (_req, res) => {
         name: o.name,
         allergens: o.allergens ?? [],
         dietaryTags: o.dietaryTags ?? [],
+        dish: {
+          id: o.dish.id,
+          bail: toNum(o.dish.bail)
+        },
       })),
     }));
     products.push({
@@ -142,8 +158,7 @@ router.get("/products", async (_req, res) => {
       dietaryTags: s.dietaryTags ?? [],
       optionGroups,
     });
-  }
-
+  }));
   res.json(products);
 });
 
@@ -164,9 +179,10 @@ router.get("/extras-categories", async (_req, res) => {
 /** GET /api/extras - returns { extraItems, packagingOptions, waiterServiceOptions, extraBundles } */
 router.get("/extras", async (_req, res) => {
   const rows = await prisma.extra.findMany({ orderBy: { sortOrder: "asc" } });
+  // console.log("rows", rows);
   const extraItems = [];
-  const packagingOptions = [];
-  const waiterServiceOptions = [];
+  // const packagingOptions = [];
+  // const waiterServiceOptions = [];
 
   for (const e of rows) {
     const base = {
@@ -179,31 +195,33 @@ router.get("/extras", async (_req, res) => {
       priceOnSite: toNum(e.priceOnSite),
       contents: e.contents ?? [],
       extrasCategoryId: e.extrasCategoryId ?? undefined,
+      bail: toNum(e.bail),
     };
     if (e.category === "dodatki") {
       extraItems.push({
         ...base,
         unitLabel: e.unitLabel ?? "szt.",
       });
-    } else if (e.category === "pakowanie") {
-      packagingOptions.push({
-        ...base,
-        priceLabel: e.priceLabel ?? (toNum(e.price) === 0 ? "W cenie" : `${e.price} zł/os.`),
-        requiresPersonCount: e.requiresPersonCount ?? false,
-      });
-    } else if (e.category === "obsluga") {
-      waiterServiceOptions.push({
-        ...base,
-        duration: e.duration ?? "4h",
-      });
     }
+    // } else if (e.category === "pakowanie") {
+    //   packagingOptions.push({
+    //     ...base,
+    //     priceLabel: e.priceLabel ?? (toNum(e.price) === 0 ? "W cenie" : `${e.price} zł/os.`),
+    //     requiresPersonCount: e.requiresPersonCount ?? false,
+    //   });
+    // } else if (e.category === "obsluga") {
+    //   waiterServiceOptions.push({
+    //     ...base,
+    //     duration: e.duration ?? "4h",
+    //   });
+    // }
   }
 
   const bundleRows = await prisma.extraBundle.findMany({
     include: { extraBundleVariants: { orderBy: { sortOrder: "asc" } } },
     orderBy: { name: "asc" },
   });
-
+  console.log("bundleRows", bundleRows?.extraBundleVariants);
   const extraBundles = bundleRows.map((b) => {
     const variants = (b.extraBundleVariants ?? []).map((v) => ({
       id: v.id,
@@ -212,6 +230,7 @@ router.get("/extras", async (_req, res) => {
       price: toNum(v.price) ?? 0,
       priceOnSite: toNum(v.priceOnSite),
       contents: v.contents ?? [],
+      bail: toNum(v.bail),
     }));
     return {
       type: "expandable",
@@ -227,7 +246,9 @@ router.get("/extras", async (_req, res) => {
     };
   });
 
-  res.json({ extraItems, packagingOptions, waiterServiceOptions, extraBundles });
+  res.json({ extraItems, 
+    // packagingOptions, waiterServiceOptions, 
+    extraBundles });
 });
 
 /** GET /api/payment-methods */

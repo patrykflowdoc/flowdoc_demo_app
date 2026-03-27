@@ -30,7 +30,7 @@ export function CateringWizard() {
     eventExtrasCategoryMappings: eventExtrasCategoryMappingsRaw,
     orderConfig,
   } = useAppData();
-
+  console.log("productsRaw", productsRaw);
   const products = (productsRaw ?? []) as Product[];
   const categories = (categoriesRaw ?? []) as Category[];
   const eventTypes = (eventTypesRaw ?? []) as { id: string; name: string }[];

@@ -139,7 +139,7 @@ model Dish {
   priceBrutto           Decimal  @default(0)
   pricePerUnit          Decimal  @default(0)
   pricePerUnitOnSite    Decimal?
-  deposit               Decimal? @default(0)
+  bail                  Decimal? @default(0)
   unitLabel             String   @default("szt.")
   minQuantity           Int      @default(1)
   icon                  String   @default("🍽️")
@@ -272,7 +272,7 @@ model Extra {
   icon                String   @default("✨")
   contents            String[] @default([])
   duration            String?
-  deposit             Decimal? @default(0)
+  bail                Decimal? @default(0)
   requiresPersonCount Boolean  @default(false)
   sortOrder           Int      @default(0)
   createdAt           DateTime @default(now())
