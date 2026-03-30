@@ -46,6 +46,7 @@ export type ExtrasCategory = {
   name: string;
   slug: string;
   description: string;
+  icon: string;
   required?: boolean;
 };
 

@@ -88,6 +88,7 @@ export type Product = SimpleProduct | ExpandableProduct | ConfigurableProduct;
 export type EventType = {
   id: string;
   name: string;
+  isCatering: boolean;
 };
 
 export type Category = {
@@ -96,34 +97,3 @@ export type Category = {
   name: string;
   description: string;
 };
-
-// ============= EVENT TYPES =============
-
-export const eventTypes: EventType[] = [
-  { id: "wedding", name: "Wesele" },
-  { id: "corporate", name: "Konferencja" },
-  { id: "birthday", name: "Urodziny" },
-  { id: "business", name: "Spotkanie firmowe" },
-  { id: "party", name: "Impreza" },
-  { id: "other", name: "Inne" },
-];
-
-// ============= CATEGORIES =============
-
-export const categories: Category[] = [
-  {
-    id: "patery",
-    name: "Patery",
-    description: "Gotowe kompozycje na każdą okazję",
-  },
-  {
-    id: "mini",
-    name: "Mini",
-    description: "Małe przekąski z wieloma wariantami",
-  },
-  {
-    id: "zestawy",
-    name: "Zestawy",
-    description: "Pełne menu do konfiguracji",
-  },
-];

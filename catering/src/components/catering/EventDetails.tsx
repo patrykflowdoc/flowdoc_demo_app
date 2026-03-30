@@ -20,12 +20,12 @@ import { FullscreenDateTimePicker } from "./FullscreenDateTimePicker";
 type EventDetailsProps = {
   cateringType: CateringType;
   guestCount: number;
-  eventType: string;
+  eventType: EventType;
   eventDate: string;
   eventTime: string;
   onCateringTypeChange: (type: CateringType) => void;
   onGuestCountChange: (count: number) => void;
-  onEventTypeChange: (type: string) => void;
+  onEventTypeChange: (type: EventType) => void;
   onEventDateChange: (date: string) => void;
   onEventTimeChange: (time: string) => void;
   eventTypes: EventType[];
@@ -39,9 +39,13 @@ export function EventDetails({
   eventType,
   eventDate,
   eventTime,
-  onCateringTypeChange,
+  onCateringTypeChange = (id: CateringType) => {
+    cateringType = id;
+  },
   onGuestCountChange,
-  onEventTypeChange,
+  onEventTypeChange = (type: EventType) => {
+    eventType = type;
+  },
   onEventDateChange,
   onEventTimeChange,
   eventTypes,
@@ -49,8 +53,8 @@ export function EventDetails({
   minLeadDays = 0,
 }: EventDetailsProps) {
   const [isPickerOpen, setIsPickerOpen] = useState(false);
-
   const selectedDate = eventDate ? new Date(eventDate) : undefined;
+
 
   const handleConfirm = (date: Date, time: string) => {
     onEventDateChange(format(date, "yyyy-MM-dd"));
@@ -148,13 +152,13 @@ export function EventDetails({
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
-            {eventTypes.map((type) => {
-              const isSelected = eventType === type.id;
+            {eventTypes.filter((type) => type.isCatering === (cateringType === "wyjazdowy")).map((type) => {
+              const isSelected = eventType === type;
               
               return (
                 <button
                   key={type.id}
-                  onClick={() => onEventTypeChange(type.id)}
+                  onClick={() => onEventTypeChange(type)}
                   className={cn(
                     "flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all",
                     "hover:border-primary hover:bg-accent/50 focus:outline-none",

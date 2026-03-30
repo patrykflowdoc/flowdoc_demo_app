@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from "react";
-import type { Product } from "@/data/products";
+import type { EventType, Product } from "@/data/products";
 import type { ExtraItem, PackagingOption, WaiterServiceOption, ExpandableExtra } from "@/data/extras";
 import type { CateringType } from "@/lib/pricing";
 import { getSimplePrice, getVariantPrice, getConfigurablePrice, getExtraPrice, getPackagingPrice, getWaiterPrice, getExtraBundleVariantPrice } from "@/lib/pricing";
@@ -13,7 +13,7 @@ export type OrderItem = {
 export type CateringOrder = {
   cateringType: CateringType;
   guestCount: number;
-  eventType: string;
+  eventType: EventType;
   eventDate: string;
   eventTime: string;
   simpleQuantities: Record<string, number>;
@@ -47,7 +47,7 @@ export type CateringOrder = {
 const initialOrder: CateringOrder = {
   cateringType: "wyjazdowy",
   guestCount: 50,
-  eventType: "",
+  eventType: { id: "", name: "", isCatering: true },
   eventDate: "",
   eventTime: "",
   simpleQuantities: {},

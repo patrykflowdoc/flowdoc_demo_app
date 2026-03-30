@@ -5,7 +5,7 @@
 
 import { z } from "zod";
 import { ProductSchema } from "@/lib/schemas/product";
-import type { Product } from "@/data/products";
+import type { EventType, Product } from "@/data/products";
 import { AdminOrderSchema, AdminOrdersSchema, type AdminOrder } from "@/lib/schemas/orders";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
@@ -102,7 +102,7 @@ export async function deleteUser(id: string): Promise<void> {
 }
 
 // ─── Catering data (read-only) ─────────────────────────────────────
-export async function getEventTypes(): Promise<{ id: string; name: string }[]> {
+export async function getEventTypes(): Promise<EventType[]> {
   return request("/api/event-types");
 }
 

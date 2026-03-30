@@ -12,7 +12,10 @@ function toNum(v) {
 /** GET /api/event-types */
 router.get("/event-types", async (_req, res) => {
   const rows = await prisma.eventType.findMany({ orderBy: { sortOrder: "asc" } });
-  res.json(rows.map((e) => ({ id: e.id, name: e.name })));
+  res.json(rows.map((e) => ({ 
+    id: e.id, 
+    name: e.name, 
+    isCatering: e.isCatering })));
 });
 
 /** GET /api/product-categories */
@@ -179,10 +182,10 @@ router.get("/extras-categories", async (_req, res) => {
 /** GET /api/extras - returns { extraItems, packagingOptions, waiterServiceOptions, extraBundles } */
 router.get("/extras", async (_req, res) => {
   const rows = await prisma.extra.findMany({ orderBy: { sortOrder: "asc" } });
-  // console.log("rows", rows);
+
   const extraItems = [];
-  // const packagingOptions = [];
-  // const waiterServiceOptions = [];
+  const packagingOptions = [];
+  const waiterServiceOptions = [];
 
   for (const e of rows) {
     const base = {

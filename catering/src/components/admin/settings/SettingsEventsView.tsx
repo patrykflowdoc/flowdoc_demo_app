@@ -6,8 +6,9 @@ import { Plus, Trash2, GripVertical, icons } from "lucide-react";
 import { cn } from "@/lib/utils";
 import * as api from "@/api/client";
 import { toast } from "@/components/ui/sonner";
+import { Checkbox } from "@/components/ui/checkbox";
 
-type LucideIconName = keyof typeof icons;
+export type LucideIconName = keyof typeof icons;
 
 const popularIcons: LucideIconName[] = [
   "Heart", "Gift", "Briefcase", "Music", "CalendarDays", "Presentation",
@@ -19,6 +20,14 @@ const popularIcons: LucideIconName[] = [
 ];
 
 interface EventType {
+  id: string;
+  name: string;
+  icon: LucideIconName;
+  sort_order: number;
+  isCatering: boolean;
+}
+
+interface ExtraCategory {
   id: string;
   name: string;
   icon: LucideIconName;
@@ -98,10 +107,12 @@ const IconPicker = ({ value, onChange }: { value: LucideIconName; onChange: (ico
 
 const SettingsEventsView = () => {
   const [events, setEvents] = useState<EventType[]>([]);
+  const [extraCategories, setExtraCategories] = useState<ExtraCategory[]>([]);
   const [newEventName, setNewEventName] = useState("");
   const [newEventIcon, setNewEventIcon] = useState<LucideIconName>("CalendarDays");
   const [loading, setLoading] = useState(true);
-
+  const [newExtraCategoryName, setNewExtraCategoryName] = useState("");
+  const [newExtraCategoryIcon, setNewExtraCategoryIcon] = useState<LucideIconName>("Sparkles");
   useEffect(() => {
     api.getAdminEventTypes()
       .then((data: unknown) => {
@@ -111,9 +122,20 @@ const SettingsEventsView = () => {
           name: String(e.name ?? ""),
           icon: (e.icon as LucideIconName) || "CalendarDays",
           sort_order: Number(e.sortOrder ?? e.sort_order ?? 0),
+          isCatering: Boolean(e.isCatering ?? true),
         })));
       })
       .catch(console.error)
+    api.getAdminExtrasCategories()
+      .then((data: unknown) => {
+        const arr = Array.isArray(data) ? data : [];
+        setExtraCategories(arr.map((e: Record<string, unknown>) => ({
+          id: String(e.id),
+          name: String(e.name ?? ""),
+          icon: (e.icon as LucideIconName) || "CalendarDays",
+          sort_order: Number(e.sortOrder ?? e.sort_order ?? 0),
+        })));
+      }).catch(console.error)
       .finally(() => setLoading(false));
   }, []);
 
@@ -131,6 +153,7 @@ const SettingsEventsView = () => {
         name: String(data.name ?? ""),
         icon: (data.icon as LucideIconName) || "CalendarDays",
         sort_order: Number(data.sortOrder ?? data.sort_order ?? 0),
+        isCatering: Boolean(data.isCatering ?? true),
       }]);
       setNewEventName("");
       setNewEventIcon("CalendarDays");
@@ -169,6 +192,62 @@ const SettingsEventsView = () => {
     }
   };
 
+  const updateEventIsCatering = async (id: string, isCatering: boolean) => {
+    setEvents(events.map((e) => (e.id === id ? { ...e, isCatering } : e)));
+    try {
+      await api.updateEventType(id, { isCatering });
+    } catch {
+      // revert on error?
+    }
+  };
+
+  const updateExtraCategoryName = async (id: string, name: string) => {
+    setExtraCategories(extraCategories.map((e) => (e.id === id ? { ...e, name } : e)));
+    try {
+      await api.updateExtrasCategory(id, { name });
+    } catch {
+      // revert on error?
+    }
+  };
+
+  const updateExtraCategoryIcon = async (id: string, icon: LucideIconName) => {
+    setExtraCategories(extraCategories.map((e) => (e.id === id ? { ...e, icon } : e)));
+    try {
+      await api.updateExtrasCategory(id, { icon });
+    } catch {
+      // revert on error?
+    }
+  };
+  const removeExtraCategory = async (id: string) => {
+    setExtraCategories(extraCategories.filter((e) => e.id !== id));
+    try {
+      await api.deleteExtrasCategory(id);
+    } catch {
+      // revert on error?
+    }
+  };
+  const addExtraCategory = async () => {
+    if (!newExtraCategoryName.trim()) return;
+    const nextOrder = extraCategories.length > 0 ? Math.max(...extraCategories.map((e) => e.sort_order)) + 1 : 0;
+    try {
+      const data = await api.createExtrasCategory({
+        name: newExtraCategoryName.trim(),
+        icon: newExtraCategoryIcon,
+        sortOrder: nextOrder,
+      }) as Record<string, unknown>;
+      setExtraCategories([...extraCategories, {
+        id: String(data.id),
+        name: String(data.name ?? ""),
+        icon: (data.icon as LucideIconName) || "CalendarDays",
+        sort_order: Number(data.sortOrder ?? data.sort_order ?? 0),
+      }]);
+      setNewExtraCategoryName("");
+      setNewExtraCategoryIcon("CalendarDays");
+      toast.success("Dodano kategorię dodatków");
+    } catch (err: unknown) {
+      toast.error("Błąd: " + (err instanceof Error ? err.message : String(err)));
+    }
+  };
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -176,7 +255,6 @@ const SettingsEventsView = () => {
       </div>
     );
   }
-
   return (
     <div>
       <div className="mb-6">
@@ -200,6 +278,14 @@ const SettingsEventsView = () => {
                   onChange={(e) => updateEventName(event.id, e.target.value)}
                   className="flex-1"
                 />
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <span className="text-sm">{event.isCatering ? "Catering" : "On-site"}</span>
+                  <Checkbox
+                    checked={event.isCatering}
+                    onCheckedChange={(checked) => updateEventIsCatering(event.id, Boolean(checked))}
+                    className="w-4 h-4"
+                  />
+                </label>
                 <button
                   onClick={() => removeEvent(event.id)}
                   className="p-2 text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover:opacity-100"
@@ -220,6 +306,50 @@ const SettingsEventsView = () => {
                 onKeyDown={(e) => e.key === "Enter" && addEvent()}
               />
               <Button size="sm" variant="outline" onClick={addEvent} disabled={!newEventName.trim()}>
+                <Plus className="w-4 h-4 mr-1" />
+                Dodaj
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+      <div className="space-y-6">
+      <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Lista kategorii dodatków</CardTitle>
+            <CardDescription>Dodawaj, edytuj i usuwaj kategorie dodatków. Kliknij ikonę, aby ją zmienić.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {extraCategories.map((extraCategory) => (
+              
+              <div key={extraCategory.id} className="flex items-center gap-3 group">
+                <GripVertical className="w-4 h-4 text-muted-foreground/40 cursor-grab" />
+                <IconPicker value={extraCategory.icon} onChange={(icon) => updateExtraCategoryIcon(extraCategory.id, icon)} />
+                <Input
+                  value={extraCategory.name}
+                  onChange={(e) => updateExtraCategoryName(extraCategory.id, e.target.value)}
+                  className="flex-1"
+                />
+                <button
+                  onClick={() => removeExtraCategory(extraCategory.id)}
+                  className="p-2 text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover:opacity-100"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+
+            <div className="flex items-center gap-3 pt-3 border-t border-border">
+              <div className="w-4" />
+              <IconPicker value={newExtraCategoryIcon} onChange={setNewExtraCategoryIcon} />
+              <Input
+                value={newExtraCategoryName}
+                onChange={(e) => setNewExtraCategoryName(e.target.value)}
+                placeholder="Nazwa nowej kategorii dodatkow..."
+                className="flex-1"
+                onKeyDown={(e) => e.key === "Enter" && addExtraCategory()}
+              />
+              <Button size="sm" variant="outline" onClick={addExtraCategory} disabled={!newExtraCategoryName.trim()}>
                 <Plus className="w-4 h-4 mr-1" />
                 Dodaj
               </Button>

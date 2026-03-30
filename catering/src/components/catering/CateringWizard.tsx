@@ -3,7 +3,7 @@ import { toast } from "@/components/ui/sonner";
 import { useCateringOrder } from "@/hooks/useCateringOrder";
 import { useAppData } from "@/hooks/useAppData";
 import { submitOrder, type SubmissionType } from "@/lib/submitOrder";
-import type { Product, Category } from "@/data/products";
+import type { Product, Category, EventType } from "@/data/products";
 import type { ExtraItem, PackagingOption, WaiterServiceOption, ExtrasCategory, PaymentMethod, ExpandableExtra } from "@/data/extras";
 import { MobileNav } from "./MobileNav";
 import { EventDetails } from "./EventDetails";
@@ -32,7 +32,7 @@ export function CateringWizard() {
   } = useAppData();
   const products = (productsRaw ?? []) as Product[];
   const categories = (categoriesRaw ?? []) as Category[];
-  const eventTypes = (eventTypesRaw ?? []) as { id: string; name: string }[];
+  const eventTypes = (eventTypesRaw ?? []) as EventType[];
   const extrasCategories = (extrasCategoriesRaw ?? []) as ExtrasCategory[];
   const eventCategoryMappings = (eventCategoryMappingsRaw ?? []) as { event_type_id: string; category_id: string }[];
   const eventExtrasCategoryMappings = (eventExtrasCategoryMappingsRaw ?? []) as {
@@ -71,7 +71,7 @@ export function CateringWizard() {
   const filteredCategories = useMemo(() => {
     if (!order.eventType) return categories;
     const mappedCategoryIds = eventCategoryMappings
-      .filter((m) => m.event_type_id === order.eventType)
+      .filter((m) => m.event_type_id === order.eventType.id)
       .map((m) => m.category_id);
     // If no mappings exist for this event type, show all categories
     if (mappedCategoryIds.length === 0) return categories;
@@ -88,7 +88,7 @@ export function CateringWizard() {
   const filteredExtrasCategories = useMemo(() => {
     if (!order.eventType) return [];
     const mappedExtrasCategoryIds = eventExtrasCategoryMappings
-      .filter((m) => m.eventTypeId === order.eventType)
+      .filter((m) => m.eventTypeId === order.eventType.id)
       .map((m) => m.extrasCategoryId);
     return extrasCategories.filter((c) => mappedExtrasCategoryIds.includes(c.id));
   }, [order.eventType, eventExtrasCategoryMappings, extrasCategories]);
@@ -268,7 +268,7 @@ export function CateringWizard() {
           <EventDetails
             cateringType={order.cateringType}
             guestCount={order.guestCount}
-            eventType={order.eventType}
+            eventType={eventTypes.find((e) => e.id === order.eventType.id) ?? eventTypes[0]}
             eventDate={order.eventDate}
             eventTime={order.eventTime}
             onCateringTypeChange={(type) => updateOrder({ cateringType: type })}

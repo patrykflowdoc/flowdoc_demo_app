@@ -451,7 +451,12 @@ router.get("/event-types", async (_req, res) => {
 router.post("/event-types", requireCsrf, async (req, res) => {
   const b = req.body ?? {};
   const created = await prisma.eventType.create({
-    data: { name: b.name ?? "", icon: b.icon ?? "CalendarDays", sortOrder: b.sortOrder ?? 0 },
+    data: {
+      name: b.name,
+      icon: b.icon ?? "CalendarDays",
+      sortOrder: b.sortOrder,
+      isCatering: b.isCatering,
+    },
   });
   res.status(201).json(created);
 });
@@ -463,6 +468,7 @@ router.patch("/event-types/:id", requireCsrf, async (req, res) => {
   if (b.name !== undefined) data.name = String(b.name);
   if (b.icon !== undefined) data.icon = String(b.icon);
   if (b.sortOrder !== undefined) data.sortOrder = Number(b.sortOrder);
+  if (b.isCatering !== undefined) data.isCatering = Boolean(b.isCatering);
   const updated = await prisma.eventType.update({
     where: { id: req.params.id },
     data,
@@ -493,6 +499,19 @@ router.post("/event-category-mappings", requireCsrf, async (req, res) => {
     },
   });
   res.status(201).json(created);
+});
+
+/** PATCH /api/admin/event-category-mappings/:id */
+router.patch("/event-category-mappings/:id", requireCsrf, async (req, res) => {
+  const data = {};
+  const b = req.body ?? {};
+  if (b.eventTypeId !== undefined) data.eventTypeId = String(b.eventTypeId);
+  if (b.categoryId !== undefined) data.categoryId = String(b.categoryId);
+  const updated = await prisma.eventCategoryMapping.update({
+    where: { id: req.params.id },
+    data,
+  });
+  res.status(200).json(updated);
 });
 
 /** DELETE /api/admin/event-category-mappings - query: event_type_id, category_id */

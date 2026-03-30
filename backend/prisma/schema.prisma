@@ -53,12 +53,13 @@ model CompanySetting {
 
 // ============== Event types & categories ==============
 model EventType {
-  id        String   @id @default(uuid())
-  name      String
-  icon      String   @default("CalendarDays")
-  sortOrder Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(uuid())
+  name        String
+  icon        String   @default("CalendarDays")
+  isCatering  Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   eventCategoryMappings EventCategoryMapping[]
   eventExtrasCategoryMappings EventExtrasCategoryMapping[]
