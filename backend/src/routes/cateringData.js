@@ -226,17 +226,18 @@ router.get("/extras", async (_req, res) => {
   });
   const extraBundles = bundleRows.map((b) => {
     const variants = (b.extraBundleVariants ?? []).map((v) => ({
-      id: v.id,
-      name: v.name,
+      id: v?.id,
+      name: v?.name,
       description: v.description ?? "",
       price: toNum(v.price) ?? 0,
-      priceOnSite: toNum(v.priceOnSite),
+      priceOnSite: toNum(v?.priceOnSite),
       contents: v.contents ?? [],
       extra: {
-        id: v.extra.id,
-        bail: toNum(v.extra.bail)
+        id: v?.extra?.id,
+        bail: toNum(v?.extra?.bail)
       },
     }));
+    console.log("variants", variants);
     return {
       type: "expandable",
       id: b.id,

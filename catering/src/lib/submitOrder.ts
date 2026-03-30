@@ -19,7 +19,7 @@ export async function submitOrder(
   allowedExtrasCategoryIds?: Set<string>,
 ): Promise<{ orderId: string; orderNumber: string }> {
   const ct = order.cateringType;
-  const eventType = eventTypes.find((e) => e.id === order.eventType);
+  const eventType = eventTypes.find((e) => e.id === order.eventType.id);
 
   const orderItems: Array<{
     name: string;
@@ -203,7 +203,7 @@ export async function submitOrder(
       contactBuildingNumber: order.contactBuildingNumber,
       contactApartmentNumber: order.contactApartmentNumber,
       eventDate: order.eventDate || null,
-      eventType: eventType?.name || order.eventType,
+      eventType: eventType?.name || order.eventType.name,
       guestCount: order.guestCount,
       deliveryZoneId: order.deliveryZoneId ?? null,
       deliveryPrice: order.deliveryPrice ?? 0,

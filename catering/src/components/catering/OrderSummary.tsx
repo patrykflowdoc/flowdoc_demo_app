@@ -57,7 +57,7 @@ export function OrderSummary({
   }, []);
 
   const ct = order.cateringType;
-  const eventType = eventTypes.find((e) => e.id === order.eventType);
+  const eventType = eventTypes.find((e) => e.id === order.eventType.id);
 
   // Build ordered items list
   type SummaryLine = { name: string; quantity: number; price: number; note?: string; time?: string; bail?: number };
