@@ -237,7 +237,6 @@ const OrderDocumentView = ({ order, docType, onBack }: { order: Order; docType: 
                   <TableRow className="hover:bg-transparent">
                     <TableHead className="font-semibold text-foreground">Danie</TableHead>
                     <TableHead className="font-semibold text-foreground text-right">Ilość</TableHead>
-                    <TableHead className="font-semibold text-foreground">Źródło</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -247,7 +246,6 @@ const OrderDocumentView = ({ order, docType, onBack }: { order: Order; docType: 
                       <TableCell className="text-right whitespace-nowrap">
                         {d.totalQty} {d.unit}
                       </TableCell>
-                      <TableCell className="text-muted-foreground text-sm">{d.source || "—"}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

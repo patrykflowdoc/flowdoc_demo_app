@@ -1,11 +1,11 @@
 import { Document, Page, Text, View } from "@react-pdf/renderer";
 import { isFoodCostEligibleLineItem } from "@/lib/orderLineItems";
-import type { PdfFoodCostExtra, PdfOrderDocumentData } from "@/types/orders";
+import type { FoodCostExtra, PdfOrderDocumentData } from "@/types/orders";
 import { fmtPdfNum } from "./fmt";
 import { PdfDocHeader } from "./components";
 import { pdfStyles } from "./styles";
 
-export function FoodCostDocument({ order, extras }: { order: PdfOrderDocumentData; extras: PdfFoodCostExtra[] }) {
+export function FoodCostDocument({ order, extras }: { order: PdfOrderDocumentData; extras: FoodCostExtra[] }) {
   const items = order.items.filter(isFoodCostEligibleLineItem).map((item) => {
     const fc = item.foodCostPerUnit!;
     const totalFC = fc * item.quantity;

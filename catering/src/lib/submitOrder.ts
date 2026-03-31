@@ -36,6 +36,7 @@ export async function submitOrder(
           total: price * qty,
           unit: product.unitLabel,
           itemType: "simple",
+          dishId: product.id,
         });
       }
     }

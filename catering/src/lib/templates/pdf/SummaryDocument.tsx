@@ -1,43 +1,14 @@
 import { Document, Page, Text, View } from "@react-pdf/renderer";
-import { effectiveLineItemType, isAddonLineItem, isExpandableLineItem, isFoodCostEligibleLineItem, splitPrimaryAndAddonItems } from "@/lib/orderLineItems";
+import { effectiveLineItemType, isAddonLineItem, isExpandableLineItem, isFoodCostEligibleLineItem } from "@/lib/orderLineItems";
 import type { PdfOrderDocumentData } from "@/types/orders";
 import { fmtPdfNum } from "./fmt";
-import { OfferItemsTableBlock, OfferPayRow, PdfDocHeader, SimpleMetaLines } from "./components";
+import { PdfDocHeader } from "./components";
 import { pdfStyles } from "./styles";
 import { groupOrdersByDate, parseDateForGrouping, type SummaryDocType } from "./summaryHelpers";
+import { OfferDocument } from "./OfferDocument";
 
 export type { SummaryDocType };
 
-function OrderDetailPage({ order }: { order: PdfOrderDocumentData }) {
-  const { primary, addons } = splitPrimaryAndAddonItems(order.items);
-  const meta: string[] = [`Adres: ${order.deliveryAddress || "—"}`];
-  if (order.guestCount > 0) meta.push(`Gości: ${order.guestCount}`);
-  if (order.notes) meta.push(`Uwagi: ${order.notes}`);
-
-  return (
-    <Page size="A4" style={pdfStyles.page}>
-      <PdfDocHeader title={order.id} subtitle={`${order.client} | ${order.event || "Wydarzenie"} | ${order.date}`} />
-      <SimpleMetaLines lines={meta} />
-      <OfferItemsTableBlock sectionTitle="Produkty" items={primary} />
-      {addons.length > 0 ? (
-        <View style={pdfStyles.sectionGap}>
-          <OfferItemsTableBlock sectionTitle="Dodatki i usługi" items={addons} />
-        </View>
-      ) : null}
-      {order.deliveryCost > 0 ? (
-        <View style={{ marginTop: 8 }}>
-          <View style={pdfStyles.tableRow} wrap={false}>
-            <Text style={{ flex: 2.2, fontSize: 9 }}>Dostawa</Text>
-            <Text style={{ flex: 0.95, fontSize: 9, textAlign: "center" }}>1</Text>
-            <Text style={{ flex: 1, fontSize: 9, textAlign: "right" }}>{fmtPdfNum(order.deliveryCost)} zł</Text>
-            <Text style={{ flex: 1, fontSize: 9, textAlign: "right" }}>{fmtPdfNum(order.deliveryCost)} zł</Text>
-          </View>
-        </View>
-      ) : null}
-      <OfferPayRow amountLabel="SUMA:" amount={order.amount} />
-    </Page>
-  );
-}
 
 export function SummaryDocument({
   orders,
@@ -51,6 +22,8 @@ export function SummaryDocument({
   const totalAmount = fmtPdfNum(orders.reduce((s, o) => s + o.amountNum, 0));
   const subtitle = `${dateRange || ""} | ${orders.length} zamówień | Łączna kwota: ${totalAmount} zł`;
   const grouped = groupOrdersByDate(orders);
+
+ 
 
   if (docType === "zamowienia") {
     return (
@@ -67,17 +40,17 @@ export function SummaryDocument({
                 </Text>
                 <View style={pdfStyles.tableHead}>
                   <Text style={[pdfStyles.tableHeadCell, { flex: 0.7 }]}>Nr</Text>
-                  <Text style={[pdfStyles.tableHeadCell, { flex: 1.1 }]}>Klient</Text>
-                  <Text style={[pdfStyles.tableHeadCell, { flex: 0.9 }]}>Wydarzenie</Text>
+                  <Text style={[pdfStyles.tableHeadCell, { flex: 1.1, textAlign: "center" }]}>Klient</Text>
+                  <Text style={[pdfStyles.tableHeadCell, { flex: 0.9, textAlign: "center" }]}>Wydarzenie</Text>
                   <Text style={[pdfStyles.tableHeadCell, { flex: 0.75, textAlign: "right" }]}>Kwota</Text>
                   <Text style={[pdfStyles.tableHeadCell, { flex: 0.45, textAlign: "center" }]}>Gości</Text>
-                  <Text style={[pdfStyles.tableHeadCell, { flex: 1.1 }]}>Adres</Text>
+                  <Text style={[pdfStyles.tableHeadCell, { flex: 1.1, textAlign: "center" }]}>Adres</Text>
                 </View>
                 {dateOrders.map((o, i) => (
                   <View key={`${o.id}-${i}`} style={pdfStyles.tableRow} wrap={false}>
                     <Text style={{ flex: 0.7, fontSize: 8 }}>{o.id}</Text>
-                    <Text style={{ flex: 1.1, fontSize: 8 }}>{o.client}</Text>
-                    <Text style={{ flex: 0.9, fontSize: 8 }}>{o.event || "—"}</Text>
+                    <Text style={{ flex: 1.1, fontSize: 8, textAlign: "center" }}>{o.client}</Text>
+                    <Text style={{ flex: 0.9, fontSize: 8, textAlign: "center" }}>{o.event || "—"}</Text>
                     <Text style={{ flex: 0.75, fontSize: 8, textAlign: "right" }}>{o.amount}</Text>
                     <Text style={{ flex: 0.45, fontSize: 8, textAlign: "center" }}>
                       {o.guestCount > 0 ? String(o.guestCount) : "—"}
@@ -90,7 +63,7 @@ export function SummaryDocument({
           })}
         </Page>
         {orders.map((order) => (
-          <OrderDetailPage key={order.id} order={order} />
+          <OfferDocument order={order}/>
         ))}
       </Document>
     );

@@ -45,7 +45,7 @@ export const pdfStyles = StyleSheet.create({
     marginBottom: 6,
   },
   sectionGap: {
-    marginTop: 10,
+    marginTop: 4,
   },
   tableHead: {
     flexDirection: "row",

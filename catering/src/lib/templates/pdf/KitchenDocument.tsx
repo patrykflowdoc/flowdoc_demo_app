@@ -1,12 +1,11 @@
 import { Document, Page, Text, View } from "@react-pdf/renderer";
 import type { PdfOrderDocumentData } from "@/types/orders";
 import { PdfDocHeader } from "./components";
-import { pdfColors, pdfStyles } from "./styles";
+import { pdfStyles } from "./styles";
 import { calculateKitchenRows } from "./kitchenCalc";
 
 export function KitchenDocument({ order }: { order: PdfOrderDocumentData }) {
   const dishes = calculateKitchenRows(order.items);
-
   return (
     <Document>
       <Page size="A4" style={pdfStyles.page}>
@@ -15,7 +14,6 @@ export function KitchenDocument({ order }: { order: PdfOrderDocumentData }) {
           <View style={pdfStyles.tableHead}>
             <Text style={[pdfStyles.tableHeadCell, { flex: 2 }]}>Danie</Text>
             <Text style={[pdfStyles.tableHeadCell, { flex: 1 }]}>Ilość</Text>
-            <Text style={[pdfStyles.tableHeadCell, { flex: 1 }]}>Źródło</Text>
           </View>
           {dishes.map((d, i) => (
             <View key={i} style={pdfStyles.tableRow} wrap={false}>
@@ -23,7 +21,6 @@ export function KitchenDocument({ order }: { order: PdfOrderDocumentData }) {
               <Text style={{ flex: 1, fontSize: 9 }}>
                 {d.totalQty} {d.unit}
               </Text>
-              <Text style={{ flex: 1.2, fontSize: 9, color: pdfColors.mutedText }}>{d.source || "—"}</Text>
             </View>
           ))}
         </View>

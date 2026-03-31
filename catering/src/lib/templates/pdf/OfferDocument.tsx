@@ -6,13 +6,13 @@ import { OfferContactTableBlock, OfferItemsTableBlock, OfferOrderDataTableBlock,
 import type { OfferContactData } from "./components";
 import { pdfStyles } from "./styles";
 
-export function OfferDocument({ order, contact }: { order: PdfOrderDocumentData; contact: OfferContactData }) {
+export function OfferDocument({ order, contact }: { order: PdfOrderDocumentData; contact?: OfferContactData }) {
   const { primary, addons } = splitPrimaryAndAddonItems(order.items);
   const meta: string[] = [`Adres dostawy: ${order.deliveryAddress || "—"}`];
   if (order.guestCount > 0) meta.push(`Liczba gości: ${order.guestCount}`);
   if (order.notes) meta.push(`Uwagi: ${order.notes}`);
   const calculatedAmount = (Number(order.amountNum) + Number(order.discount ?? 0) - Number(order.deposit ?? 0)).toFixed(2);
-  const tailRows: { kind: "delivery" | "discount"; label: string; qty: string; ppu: string; total: string }[] = [];
+  const tailRows: { kind: "delivery" | "discount" | "deposit"; label: string; qty: string; ppu: string; total: string }[] = [];
   if (order.deliveryCost > 0) {
     tailRows.push({
       kind: "delivery",
@@ -31,10 +31,19 @@ export function OfferDocument({ order, contact }: { order: PdfOrderDocumentData;
       total: `-${fmtPdfNum(order.discount)} zł`,
     });
   }
+  if (order.deposit != null && order.deposit > 0) {
+    tailRows.push({
+      kind: "deposit",
+      label: "Zaliczka",
+      qty: "",
+      ppu: "",
+      total: `-${fmtPdfNum(order.deposit)} zł`,
+    });
+  }
   return (
     <Document>
       <Page size="A4" style={pdfStyles.page}>
-        <OfferContactTableBlock sectionTitle="Kontakt" contact={contact} />
+        {contact ? <OfferContactTableBlock sectionTitle="Kontakt" contact={contact} /> : null}
         <OfferOrderDataTableBlock order={order as Order} />
         <OfferItemsTableBlock sectionTitle="Produkty" items={primary} />
 
@@ -45,7 +54,7 @@ export function OfferDocument({ order, contact }: { order: PdfOrderDocumentData;
         ) : null}
 
         {tailRows.length > 0 ? (
-          <View style={{ marginTop: 8 }}>
+          <View style={{ marginTop: 4 }}>
             {tailRows.map((r, i) => (
               <View key={i} style={pdfStyles.tableRow} wrap={false}>
                 <Text style={{ flex: 2.2, fontSize: 9 }}>{r.label}</Text>

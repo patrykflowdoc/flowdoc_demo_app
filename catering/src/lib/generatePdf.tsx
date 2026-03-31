@@ -50,11 +50,11 @@ async function renderToFile(element: ReactElement, filename: string): Promise<vo
   URL.revokeObjectURL(url);
 }
 
-function asText(value: unknown): string {
+export function asText(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-export async function generateOfferPdf(order: PdfOrderDocumentData, _companyName?: string): Promise<void> {
+export async function generateOfferPdf(order: PdfOrderDocumentData): Promise<void> {
   let companySettings: { [key: string]: unknown } = {};
   try {
     companySettings = await getCompanySettings();
