@@ -26,17 +26,17 @@ import {
   isFoodCostEligibleLineItem,
   splitPrimaryAndAddonItems,
 } from "@/lib/orderLineItems";
-import { adminOrderItemToPdfLineItem } from "@/lib/pdfOrderMappers";
 import type {
   DbClient,
   FoodCostExtra,
   Order,
   OrderDocumentType,
   OrderStatus,
-  PdfOrderLineItem,
+  OrderItem,
+  OrderSubItem,
 } from "@/types/orders";
+import { ProductTable } from "./ProductTable";
 
-type OrderItem = PdfOrderLineItem;
 
 const statusColors: Record<OrderStatus, string> = {
   "Nowe zamówienie": "bg-blue-50 text-blue-700 border-blue-200",
@@ -49,8 +49,7 @@ const statusColors: Record<OrderStatus, string> = {
 
 const allStatuses: OrderStatus[] = ["Nowe zamówienie", "Nowa oferta", "Potwierdzone", "W realizacji", "Zrealizowane", "Anulowane"];
 
-const mockOrders: Order[] = [
-];
+const mockOrders: Order[] = [];
 
 // ===== DOCUMENT TYPES =====
 const docLabels: Record<OrderDocumentType, { label: string; Icon: LucideIcon }> = {
@@ -118,7 +117,7 @@ const OrderDocumentView = ({ order, docType, onBack }: { order: Order; docType: 
     if (isAddonLineItem(t)) return;
     if (isExpandableLineItem(t) && item.subItems) {
       item.subItems.forEach((sub) => {
-        const key = sub.name;
+        const key = sub.dishId ?? sub.name;
         if (!dishMap[key]) dishMap[key] = { name: sub.name, totalQty: 0, unit: sub.unit, source: item.name };
         dishMap[key].totalQty += sub.quantity;
       });
@@ -144,6 +143,7 @@ const OrderDocumentView = ({ order, docType, onBack }: { order: Order; docType: 
       margin: item.total > 0 ? ((item.total - totalFoodCost) / item.total) * 100 : 0,
     };
   });
+
   const { primary: offerPrimary, addons: offerAddons } = splitPrimaryAndAddonItems(order.items);
   const extrasTotal = fcExtras.reduce((s, e) => s + e.amount, 0);
   const totalFC = foodCostItems.reduce((s, i) => s + i.totalFoodCost, 0) + extrasTotal;
@@ -190,26 +190,7 @@ const OrderDocumentView = ({ order, docType, onBack }: { order: Order; docType: 
             <div className="space-y-6">
               <div>
                 <h4 className="text-sm font-semibold text-foreground mb-2">Produkty</h4>
-                <Table>
-                  <TableHeader>
-                    <TableRow className="hover:bg-transparent">
-                      <TableHead className="font-semibold text-foreground">Pozycja</TableHead>
-                      <TableHead className="font-semibold text-foreground text-center">Ilość</TableHead>
-                      <TableHead className="font-semibold text-foreground text-right">Cena jedn.</TableHead>
-                      <TableHead className="font-semibold text-foreground text-right">Razem</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {offerPrimary.map((item, i) => (
-                      <TableRow key={i}>
-                        <TableCell className="font-medium">{item.name}</TableCell>
-                        <TableCell className="text-center">{item.quantity} {item.unit}</TableCell>
-                        <TableCell className="text-right text-muted-foreground">{fmtNum(item.pricePerUnit)} zł</TableCell>
-                        <TableCell className="text-right font-semibold">{fmtNum(item.total)} zł</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                <ProductTable items={offerPrimary} />
               </div>
               {offerAddons.length > 0 ? (
                 <div className="rounded-lg border border-border bg-muted/20 p-3">
@@ -225,7 +206,7 @@ const OrderDocumentView = ({ order, docType, onBack }: { order: Order; docType: 
                     </TableHeader>
                     <TableBody>
                       {offerAddons.map((item, i) => (
-                        <TableRow key={i}>
+                        <TableRow key={ i+4}>
                           <TableCell className="font-medium">{item.name}</TableCell>
                           <TableCell className="text-center">{item.quantity} {item.unit}</TableCell>
                           <TableCell className="text-right text-muted-foreground">{fmtNum(item.pricePerUnit)} zł</TableCell>
@@ -454,7 +435,6 @@ const OrderDetailView = ({ order, onBack, onEdit, onGenerateDoc, onLinkClient }:
 
   const linkedClient = order.clientId ? dbClients.find(c => c.id === order.clientId) : null;
   const { primary: detailPrimary, addons: detailAddons } = splitPrimaryAndAddonItems(order.items);
-
   return (
     <div>
       <div className="flex items-center gap-4 mb-6">
@@ -493,6 +473,7 @@ const OrderDetailView = ({ order, onBack, onEdit, onGenerateDoc, onLinkClient }:
         </Button>
       </div>
 
+        {/* CLIENT DETAILS */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card>
           <CardHeader className="pb-3">
@@ -591,46 +572,7 @@ const OrderDetailView = ({ order, onBack, onEdit, onGenerateDoc, onLinkClient }:
           <div className="space-y-6">
             <div>
               <h4 className="text-sm font-semibold text-foreground mb-2">Produkty</h4>
-              <Table>
-                <TableHeader>
-                  <TableRow className="hover:bg-transparent">
-                    <TableHead className="font-semibold text-foreground">Produkt</TableHead>
-                    <TableHead className="font-semibold text-foreground text-center">Ilość</TableHead>
-                    <TableHead className="font-semibold text-foreground text-right">Cena jedn.</TableHead>
-                    <TableHead className="font-semibold text-foreground text-right">Razem</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {detailPrimary.map((item, i) => {
-                    if(item.subItems && item.subItems.length > 0) {
-                      return item.subItems.map((subItem, j) => (
-                        <>
-                        <TableRow key={`${i}-${j}`}>
-                          <TableCell className="font-medium">{item.name}</TableCell>
-                          <TableCell className="text-center">{item.quantity} {item.unit}</TableCell>
-                          <TableCell className="text-right text-muted-foreground">{item.pricePerUnit.toFixed(2)} zł</TableCell>
-                          <TableCell className="text-right font-semibold">{item.total.toFixed(2)} zł</TableCell>
-                        </TableRow>
-                        <TableRow key={`${i}-${j}`}>
-                          <TableCell className="font-medium">{subItem.name}</TableCell>
-                          <TableCell className="text-center">{subItem.quantity} {subItem.unit}</TableCell>
-                          <TableCell className="text-right text-muted-foreground">{subItem.foodCostPerUnit?.toFixed(2) ?? "0.00"} zł</TableCell>
-                          {/* <TableCell className="text-right font-semibold">{(subItem.pricePerUnit * subItem.quantity).toFixed(2)} zł</TableCell> */}
-                        </TableRow>
-                        </>
-                      ));
-                    }
-                    return (
-                      <TableRow key={i}>
-                        <TableCell className="font-medium">{item.name}</TableCell>
-                        <TableCell className="text-center">{item.quantity} {item.unit}</TableCell>
-                        <TableCell className="text-right text-muted-foreground">{item.pricePerUnit.toFixed(2)} zł</TableCell>
-                        <TableCell className="text-right font-semibold">{item.total.toFixed(2)} zł</TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+              <ProductTable items={detailPrimary} />
             </div>
             {detailAddons.length > 0 ? (
               <div className="rounded-lg border border-border bg-muted/20 p-3">
@@ -723,7 +665,7 @@ function useCatalogProducts() {
 // ===== SUB-ITEM SELECTOR (for bundles & configurable sets) =====
 const SubItemSelector = ({ product, onConfirm, onCancel }: {
   product: CatalogProduct;
-  onConfirm: (subItems: OrderItem["subItems"]) => void;
+  onConfirm: (subItems: OrderSubItem[]) => void;
   onCancel: () => void;
 }) => {
   // For bundles: select which variants
@@ -737,7 +679,7 @@ const SubItemSelector = ({ product, onConfirm, onCancel }: {
         .filter(([, qty]) => qty > 0)
         .map(([vId, qty]) => {
           const v = product.variants!.find(v => v.id === vId)!;
-          return { name: v.name, quantity: qty, unit: "szt." };
+          return { id: vId, name: v.name, quantity: qty, unit: "szt." };
         });
       onConfirm(subs);
     };
@@ -777,7 +719,7 @@ const SubItemSelector = ({ product, onConfirm, onCancel }: {
         const ids = selectedOptions[g.id] || [];
         for (const id of ids) {
           const opt = g.options.find(o => o.id === id);
-          if (opt) subs!.push({ name: `${g.name}: ${opt.name}`, quantity: 1, unit: "szt." });
+          if (opt) subs!.push({ id: id, name: `${g.name}: ${opt.name}`, quantity: 1, unit: "szt." });
         }
       }
       onConfirm(subs);
@@ -848,8 +790,10 @@ const OrderEditView = ({ order, onBack, onSave }: { order: Order; onBack: () => 
       return;
     }
     setItems(prev => [...prev, {
+      id: product.id,
       name: product.name, quantity: 1, unit: product.unit,
       pricePerUnit: product.defaultPrice, total: product.defaultPrice, type: product.type,
+      subItems: null,
     }]);
     setShowAddProduct(false);
     setAddSearch("");
@@ -858,9 +802,10 @@ const OrderEditView = ({ order, onBack, onSave }: { order: Order; onBack: () => 
   const handleSubItemConfirm = (subItems: OrderItem["subItems"]) => {
     if (!configuringProduct) return;
     setItems(prev => [...prev, {
+      id: configuringProduct.id,
       name: configuringProduct.name, quantity: 1, unit: configuringProduct.unit,
       pricePerUnit: configuringProduct.defaultPrice, total: configuringProduct.defaultPrice,
-      type: configuringProduct.type, subItems,
+      type: configuringProduct.type, subItems: subItems ?? null,
     }]);
     setConfiguringProduct(null);
     setShowAddProduct(false);
@@ -1486,8 +1431,10 @@ const AddOrderSheet = ({ open, onClose, onAdd }: { open: boolean; onClose: () =>
       return;
     }
     setItems(prev => [...prev, {
+      id: product.id,
       name: product.name, quantity: 1, unit: product.unit,
       pricePerUnit: product.defaultPrice, total: product.defaultPrice, type: product.type,
+      subItems: null,
     }]);
     setShowProducts(false);
     setProductSearch("");
@@ -1496,9 +1443,10 @@ const AddOrderSheet = ({ open, onClose, onAdd }: { open: boolean; onClose: () =>
   const handleSubItemConfirm = (subItems: OrderItem["subItems"]) => {
     if (!configuringProduct) return;
     setItems(prev => [...prev, {
+      id: configuringProduct.id,
       name: configuringProduct.name, quantity: 1, unit: configuringProduct.unit,
       pricePerUnit: configuringProduct.defaultPrice, total: configuringProduct.defaultPrice,
-      type: configuringProduct.type, subItems,
+      type: configuringProduct.type, subItems: subItems ?? null,
     }]);
     setConfiguringProduct(null);
     setShowProducts(false);
@@ -1885,12 +1833,12 @@ const OrdersView = () => {
   const fetchOrders = useCallback(async () => {
     try {
       const dbOrders = await api.getAdminOrders();
+      console.log("dbOrders", dbOrders);
       if (!dbOrders || dbOrders.length === 0) return;
 
       const mapped: Order[] = dbOrders.map((o) => {
         const orderItems = o.orderItems ?? [];
-        const items: OrderItem[] = orderItems.map(adminOrderItemToPdfLineItem);
-
+        const items: OrderItem[] = orderItems;
         return {
           id: String(o.orderNumber ?? ""),
           dbId: String(o.id ?? ""),
@@ -1925,7 +1873,6 @@ const OrdersView = () => {
     void fetchOrders();
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [fetchOrders]);
-
   const filtered = orders.filter((o) => {
     const q = search.toLowerCase().trim();
     const matchSearch = !q ||
@@ -1990,11 +1937,14 @@ const OrdersView = () => {
             total: item.total,
             itemType: item.type || "simple",
             foodCostPerUnit: item.foodCostPerUnit ?? 0,
+            ...(item.dishId ? { dishId: item.dishId } : {}),
             subItems: (item.subItems ?? []).map((sub) => ({
               name: sub.name,
               quantity: sub.quantity,
               unit: sub.unit,
               foodCostPerUnit: sub.foodCostPerUnit ?? 0,
+              pricePerUnit: sub.pricePerUnit ?? 0,
+              ...(sub.dishId ? { dishId: sub.dishId } : {}),
             })),
           })),
         });
@@ -2006,7 +1956,6 @@ const OrdersView = () => {
   };
   const handleDeleteOrder = async (orderId: string) => {
     try {
-      console.log("orderId", orderId);
       await api.deleteAdminOrder(orderId);
     
       await fetchOrders();
@@ -2020,7 +1969,6 @@ const OrdersView = () => {
     setSelectedDocType(type);
     setView("document");
   };
-
   if (view === "document" && selectedOrder) {
     return <OrderDocumentView order={selectedOrder} docType={selectedDocType} onBack={() => setView("detail")} />;
   }

@@ -1,16 +1,14 @@
 import { type ReactElement } from "react";
 import { pdf, Font } from "@react-pdf/renderer";
-import type { PdfFoodCostExtra, PdfOrderDocumentData } from "@/types/orders";
 import { FoodCostDocument } from "@/lib/templates/pdf/FoodCostDocument";
 import { KitchenDocument } from "@/lib/templates/pdf/KitchenDocument";
 import { OfferDocument } from "@/lib/templates/pdf/OfferDocument";
 import { SummaryDocument, type SummaryDocType } from "@/lib/templates/pdf/SummaryDocument";
-
-export type { PdfFoodCostExtra, PdfOrder, PdfOrderDocumentData } from "@/types/orders";
+import { getCompanySettings } from "@/api/client";
+import type { FoodCostExtra, PdfOrderDocumentData } from "@/types/orders";
+export type { FoodCostExtra, Order, OrderDocumentType, OrderStatus, OrderItem, OrderSubItem, PdfOrderDocumentData } from "@/types/orders";
 export type { SummaryDocType };
 
-/** @deprecated Use PdfFoodCostExtra */
-export type FoodCostExtra = PdfFoodCostExtra;
 
 let fontRegistrationAttempted = false;
 
@@ -52,11 +50,26 @@ async function renderToFile(element: ReactElement, filename: string): Promise<vo
   URL.revokeObjectURL(url);
 }
 
-export async function generateOfferPdf(order: PdfOrderDocumentData, _companyName?: string): Promise<void> {
-  await renderToFile(<OfferDocument order={order} />, `oferta_${order.id}.pdf`);
+function asText(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
 }
 
-export async function generateFoodCostPdf(order: PdfOrderDocumentData, extras?: PdfFoodCostExtra[]): Promise<void> {
+export async function generateOfferPdf(order: PdfOrderDocumentData, _companyName?: string): Promise<void> {
+  let companySettings: { [key: string]: unknown } = {};
+  try {
+    companySettings = await getCompanySettings();
+  } catch {
+    companySettings = {};
+  }
+  const contact = {
+    phone: asText(companySettings.phone),
+    email: asText(companySettings.email),
+    address: asText(companySettings.address),
+  };
+  await renderToFile(<OfferDocument order={order} contact={contact} />, `oferta_${order.id}.pdf`);
+}
+
+export async function generateFoodCostPdf(order: PdfOrderDocumentData, extras?: FoodCostExtra[]): Promise<void> {
   await renderToFile(<FoodCostDocument order={order} extras={extras ?? []} />, `food_cost_${order.id}.pdf`);
 }
 

@@ -3,26 +3,29 @@
  */
 
 /** PDF / admin line sub-row (OrderItemSubItem). */
-export type PdfOrderSubItem = {
+export type OrderSubItem = {
+  id?: string;
   name: string;
   quantity: number;
   unit: string;
   foodCostPerUnit?: number;
-  // pricePerUnit: number;
+  dishId?: string;
+  pricePerUnit?: number;
 };
 
 /** PDF / admin order line (OrderItem + optional subItems). */
-export type PdfOrderLineItem = {
+export type OrderItem = {
+  id?: string;
   name: string;
   quantity: number;
   unit: string;
   pricePerUnit: number;
   total: number;
-  /** View/API line type (e.g. simple, bundle, extra, extra_bundle). */
   type?: string;
   itemType?: string;
   foodCostPerUnit?: number;
-  subItems?: PdfOrderSubItem[];
+  dishId?: string;
+  subItems: OrderSubItem[] | null;
 };
 
 /** Payload for single-order PDF documents (maps from admin order view). */
@@ -41,16 +44,14 @@ export type PdfOrderDocumentData = {
   guestCount: number;
   discount?: number;
   deposit?: number;
-  items: PdfOrderLineItem[];
+  items: OrderItem[];
 };
 
-/** @deprecated Use PdfOrderDocumentData */
-export type PdfOrder = PdfOrderDocumentData;
-
-export type PdfFoodCostExtra = {
+export type FoodCostExtra = {
   id: string;
   name: string;
   amount: number;
+  isNew?: boolean;
 };
 
 export type OrderStatus =
@@ -61,7 +62,7 @@ export type OrderStatus =
   | "Zrealizowane"
   | "Anulowane";
 
-/** Admin list/detail/edit order view (not the Zod-parsed API row). */
+/** Admin list/detail/edit order view */
 export interface Order {
   id: string;
   dbId: string;
@@ -76,7 +77,7 @@ export interface Order {
   amountNum: number;
   status: OrderStatus;
   notes: string;
-  items: PdfOrderLineItem[];
+  items: OrderItem[];
   createdAt: string;
   deliveryCost: number;
   guestCount: number;
@@ -97,12 +98,7 @@ export interface DbClient {
 }
 
 /** Editable food-cost extra line in the document view. */
-export interface FoodCostExtra {
-  id: string;
-  name: string;
-  amount: number;
-  isNew?: boolean;
-}
+
 
 export type OrderDocumentType = "offer" | "kitchen" | "food-cost" | "full";
 

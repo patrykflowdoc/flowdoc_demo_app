@@ -1,11 +1,12 @@
 import { Document, Page, Text, View } from "@react-pdf/renderer";
 import { splitPrimaryAndAddonItems } from "@/lib/orderLineItems";
-import type { PdfOrderDocumentData } from "@/types/orders";
+import type { Order, PdfOrderDocumentData } from "@/types/orders";
 import { fmtPdfNum } from "./fmt";
-import { OfferItemsTableBlock, OfferPayRow, PdfDocHeader, SimpleMetaLines } from "./components";
+import { OfferContactTableBlock, OfferItemsTableBlock, OfferOrderDataTableBlock, OfferPayRow } from "./components";
+import type { OfferContactData } from "./components";
 import { pdfStyles } from "./styles";
 
-export function OfferDocument({ order }: { order: PdfOrderDocumentData }) {
+export function OfferDocument({ order, contact }: { order: PdfOrderDocumentData; contact: OfferContactData }) {
   const { primary, addons } = splitPrimaryAndAddonItems(order.items);
   const meta: string[] = [`Adres dostawy: ${order.deliveryAddress || "—"}`];
   if (order.guestCount > 0) meta.push(`Liczba gości: ${order.guestCount}`);
@@ -33,9 +34,8 @@ export function OfferDocument({ order }: { order: PdfOrderDocumentData }) {
   return (
     <Document>
       <Page size="A4" style={pdfStyles.page}>
-        <PdfDocHeader title={`Oferta ${order.id}`} subtitle={`${order.client} | ${order.event || "Wydarzenie"} | ${order.date}`} />
-        <SimpleMetaLines lines={meta} />
-
+        <OfferContactTableBlock sectionTitle="Kontakt" contact={contact} />
+        <OfferOrderDataTableBlock order={order as Order} />
         <OfferItemsTableBlock sectionTitle="Produkty" items={primary} />
 
         {addons.length > 0 ? (

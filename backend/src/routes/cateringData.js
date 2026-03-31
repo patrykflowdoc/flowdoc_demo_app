@@ -237,7 +237,6 @@ router.get("/extras", async (_req, res) => {
         bail: toNum(v?.extra?.bail)
       },
     }));
-    console.log("variants", variants);
     return {
       type: "expandable",
       id: b.id,

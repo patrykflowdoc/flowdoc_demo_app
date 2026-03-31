@@ -1,4 +1,4 @@
-import { submitOrder as apiSubmitOrder } from "@/api/client";
+import { submitOrder as apiSubmitOrder, type SubmitOrderPayload } from "@/api/client";
 import type { CateringOrder } from "@/hooks/useCateringOrder";
 import type { Product } from "@/data/products";
 import type { ExtraItem, PackagingOption, WaiterServiceOption, ExpandableExtra } from "@/data/extras";
@@ -21,15 +21,8 @@ export async function submitOrder(
   const ct = order.cateringType;
   const eventType = eventTypes.find((e) => e.id === order.eventType.id);
 
-  const orderItems: Array<{
-    name: string;
-    quantity: number;
-    pricePerUnit: number;
-    total: number;
-    unit: string;
-    itemType: string;
-    subItems?: Array<{ name: string; quantity: number; unit: string }>;
-  }> = [];
+  type OrderLinePayload = SubmitOrderPayload["orderItems"][number];
+  const orderItems: OrderLinePayload[] = [];
 
   for (const [productId, qty] of Object.entries(order.simpleQuantities)) {
     if (qty > 0) {
@@ -50,24 +43,34 @@ export async function submitOrder(
 
   for (const [productId, variants] of Object.entries(order.expandableQuantities)) {
     const product = products.find((p) => p.id === productId);
-    if (product && product.type === "expandable") {
-      for (const [variantId, qty] of Object.entries(variants)) {
-        if (qty > 0) {
-          const variant = product.variants.find((v) => v.id === variantId);
-          if (variant) {
-            const price = getVariantPrice(variant, ct);
-            orderItems.push({
-              name: `${product.name} — ${variant.name}`,
-              quantity: qty,
-              pricePerUnit: price,
-              total: price * qty,
-              unit: "szt.",
-              itemType: "expandable",
-              subItems: [{ name: variant.name, quantity: qty, unit: "szt." }],
-            });
-          }
-        }
-      }
+    if (!product || product.type !== "expandable") continue;
+
+    const subItems: NonNullable<OrderLinePayload["subItems"]> = [];
+    let lineTotal = 0;
+    for (const [variantId, qty] of Object.entries(variants)) {
+      if (qty <= 0) continue;
+      const variant = product.variants.find((v) => v.id === variantId);
+      if (!variant) continue;
+      const price = getVariantPrice(variant, ct);
+      lineTotal += price * qty;
+      subItems.push({
+        name: variant.name,
+        quantity: qty,
+        unit: "szt.",
+        dishId: variant.dish.id,
+        pricePerUnit: price,
+      });
+    }
+    if (subItems.length > 0) {
+      orderItems.push({
+        name: product.name,
+        quantity: 1,
+        pricePerUnit: lineTotal,
+        total: lineTotal,
+        unit: "kpl.",
+        itemType: "expandable",
+        subItems,
+      });
     }
   }
 
@@ -129,7 +132,7 @@ export async function submitOrder(
       !bundle.extrasCategoryId ||
       allowedExtrasCategoryIds.has(bundle.extrasCategoryId);
     if (!isAllowedByCategory) continue;
-    const subItems: Array<{ name: string; quantity: number; unit: string }> = [];
+    const subItems: NonNullable<OrderLinePayload["subItems"]> = [];
     let bundleTotal = 0;
     for (const [variantId, qty] of Object.entries(variants)) {
       if (qty <= 0) continue;

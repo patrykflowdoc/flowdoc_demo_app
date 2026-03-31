@@ -11,6 +11,11 @@ import { requireCsrf } from "../middleware/csrf.js";
 const router = Router();
 router.use(requireAuth);
 
+function numOrAdminOrder(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 /** PATCH body: only provided fields; numeric fields coerced from string. */
 const bundlePatchSchema = z
   .object({
@@ -257,6 +262,7 @@ router.patch("/orders/:id", requireCsrf, async (req, res) => {
               ? Number(it.foodCostPerUnit)
               : 0,
           sortOrder: i,
+          dishId: it.dishId ? String(it.dishId) : null,
         },
       });
       if (Array.isArray(it.subItems) && it.subItems.length > 0) {
@@ -264,12 +270,11 @@ router.patch("/orders/:id", requireCsrf, async (req, res) => {
           data: it.subItems.map((s) => ({
             orderItemId: created.id,
             name: String(s.name),
-            quantity: Number(s.quantity),
+            quantity: numOrAdminOrder(s.quantity, 0),
             unit: s.unit,
-            foodCostPerUnit:
-              s.foodCostPerUnit != null
-                ? Number(s.foodCostPerUnit)
-                : 0,
+            foodCostPerUnit: numOrAdminOrder(s.foodCostPerUnit, 0),
+            pricePerUnit: numOrAdminOrder(s.pricePerUnit, 0),
+            dishId: s.dishId ? String(s.dishId) : null,
           })),
         });
       }

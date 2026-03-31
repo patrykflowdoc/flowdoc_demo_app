@@ -1,8 +1,9 @@
-import { View, Text } from "@react-pdf/renderer";
+import { View, Text, Image, Svg, Path, Circle, Line } from "@react-pdf/renderer";
+import type { Order, OrderItem } from "@/types/orders";
 import { effectiveLineItemType, isExpandableLineItem } from "@/lib/orderLineItems";
-import type { PdfOrderLineItem } from "@/types/orders";
 import { fmtPdfNum } from "./fmt";
 import { pdfStyles } from "./styles";
+import logoImage from "@/assets/logo.png";
 
 const SUBROW_NO_DETAILS = "Brak wybranych opcji/wariantów";
 
@@ -63,7 +64,96 @@ function SubRow({ label, qtyText }: { label: string; qtyText: string }) {
   );
 }
 
-export function OfferItemsTableBlock({ sectionTitle, items }: { sectionTitle: string; items: PdfOrderLineItem[] }) {
+export type OfferContactData = {
+  phone: string;
+  email: string;
+  address: string;
+};
+
+export function OfferContactTableBlock({
+  sectionTitle,
+  contact,
+}: {
+  sectionTitle: string;
+  contact: OfferContactData;
+}) {
+  const phoneValue = contact.phone || "—";
+  const emailValue = contact.email || "—";
+  const addressValue = contact.address || "—";
+  return (
+    <View style={{ marginBottom: 10 }}>
+      <View style={{ flexDirection: "row", borderWidth: 0.5, borderColor: "#d2dbd7" }}>
+        <View style={{ width: "70%", padding: 10 }}>
+          <Text style={{ fontSize: 22, color: "#2d9c6d", fontWeight: "bold", marginBottom: 8 }}>{sectionTitle}</Text>
+          <ContactLine icon="phone" value={phoneValue} />
+          <ContactLine icon="globe" value="www.szczypta.smaku.com" />
+          <ContactLine icon="mapPin" value={addressValue} />
+          <ContactLine icon="mail" value={emailValue} />
+        </View>
+        <View
+          style={{
+            width: "30%",
+            borderLeftWidth: 0.5,
+            borderLeftColor: "#d2dbd7",
+            alignItems: "center",
+            justifyContent: "center",
+            paddingHorizontal: 8,
+            paddingVertical: 12,
+          }}
+        >
+          <Image src={logoImage} style={{ width: 120, objectFit: "contain" }} />
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function ContactLine({ icon, value }: { icon: "phone" | "globe" | "mapPin" | "mail"; value: string }) {
+  return (
+    <View style={{ flexDirection: "row", marginBottom: 4, alignItems: "center" }}>
+      <View style={{ width: 18, marginRight: 8 }}>
+        <LucideIcon name={icon} />
+      </View>
+      <Text style={{ fontSize: 9 }}>{value}</Text>
+    </View>
+  );
+}
+
+function LucideIcon({ name }: { name: "phone" | "globe" | "mapPin" | "mail" }) {
+  const common = { stroke: "#63746e", strokeWidth: 1.8, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+  if (name === "phone") {
+    return (
+      <Svg viewBox="0 0 24 24" width={14} height={14}>
+        <Path d="M22 16.92v3a2 2 0 0 1-2.18 2A19.8 19.8 0 0 1 3.09 5.18 2 2 0 0 1 5.05 3h3a2 2 0 0 1 2 1.72c.12.9.33 1.78.62 2.62a2 2 0 0 1-.45 2.11L9 10.91a16 16 0 0 0 4.09 4.09l1.46-1.22a2 2 0 0 1 2.11-.45c.84.29 1.72.5 2.62.62A2 2 0 0 1 22 16.92z" {...common} fill="none" />
+      </Svg>
+    );
+  }
+  if (name === "globe") {
+    return (
+      <Svg viewBox="0 0 24 24" width={14} height={14}>
+        <Circle cx="12" cy="12" r="10" {...common} fill="none" />
+        <Line x1="2" y1="12" x2="22" y2="12" {...common} />
+        <Path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" {...common} fill="none" />
+      </Svg>
+    );
+  }
+  if (name === "mapPin") {
+    return (
+      <Svg viewBox="0 0 24 24" width={14} height={14}>
+        <Path d="M12 22s7-5.2 7-12a7 7 0 1 0-14 0c0 6.8 7 12 7 12z" {...common} fill="none" />
+        <Circle cx="12" cy="10" r="2.5" {...common} fill="none" />
+      </Svg>
+    );
+  }
+  return (
+    <Svg viewBox="0 0 24 24" width={14} height={14}>
+      <Path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" {...common} fill="none" />
+      <Path d="m22 7-10 7L2 7" {...common} fill="none" />
+    </Svg>
+  );
+}
+
+export function OfferItemsTableBlock({ sectionTitle, items }: { sectionTitle: string; items: OrderItem[] }) {
   if (items.length === 0) return null;
   return (
     <View>
@@ -103,6 +193,46 @@ export function OfferItemsTableBlock({ sectionTitle, items }: { sectionTitle: st
     </View>
   );
 }
+
+export function OfferOrderDataTableBlock({ order }: { order: Order }) {
+  const eventDate = order.date?.trim() ? order.date : "—";
+  const eventTime = "—";
+  const clientName = order.client?.trim() ? order.client : "—";
+  const phone = order.phone?.trim() ? order.phone : "—";
+  const deliveryAddress = order.deliveryAddress?.trim() ? order.deliveryAddress : "";
+
+  const rows = [
+    { label: "Data wydarzenia", value: eventDate },
+    { label: "Godzina wydarzenia", value: eventTime },
+    { label: "Klient", value: clientName },
+    ...(deliveryAddress ? [{ label: "Adres dostawy", value: deliveryAddress }] : []),
+    { label: "Telefon", value: phone },
+  ];
+
+  return (
+    <View style={{ marginBottom: 10 }}>
+      <Text style={pdfStyles.sectionTitle}>Dane zamówienia</Text>
+      <View style={{ borderWidth: 0.5, borderColor: "#d2dbd7" }}>
+        {rows.map((row, idx) => (
+          <View
+            key={`${row.label}-${idx}`}
+            style={{
+              flexDirection: "row",
+              borderBottomWidth: idx === rows.length - 1 ? 0 : 0.5,
+              borderBottomColor: "#d2dbd7",
+            }}
+          >
+            <Text style={{ width: "35%", paddingHorizontal: 8, paddingVertical: 6, color: "#63746e", fontSize: 9 }}>
+              {row.label}
+            </Text>
+            <Text style={{ width: "65%", paddingHorizontal: 8, paddingVertical: 6, fontSize: 9 }}>{row.value}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 
 /** Full-width footer when first columns are merged in label. */
 export function OfferPayRow({ amountLabel, amount }: { amountLabel: string; amount: string }) {

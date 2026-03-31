@@ -4,6 +4,11 @@ import { sendOrderPlacedAdminEmail, sendOrderPlacedClientEmail } from "../utils/
 
 const router = Router();
 
+function numOr(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 /**
  * POST /api/orders
  * Body: {
@@ -84,6 +89,7 @@ router.post("/", async (req, res) => {
             foodCostPerUnit:
               item.foodCostPerUnit != null ? Number(item.foodCostPerUnit) : 0,
             sortOrder: idx,
+            dishId: item.dishId ? String(item.dishId) : null,
           },
         });
 
@@ -92,10 +98,11 @@ router.post("/", async (req, res) => {
             data: item.subItems.map((sub) => ({
               orderItemId: createdItem.id,
               name: String(sub.name),
-              quantity: Number(sub.quantity),
+              quantity: numOr(sub.quantity, 0),
               unit: sub.unit,
-              foodCostPerUnit: Number(sub.foodCostPerUnit),
-              pricePerUnit: Number(sub.pricePerUnit),
+              foodCostPerUnit: numOr(sub.foodCostPerUnit, 0),
+              pricePerUnit: numOr(sub.pricePerUnit, 0),
+              dishId: sub.dishId ? String(sub.dishId) : null,
             })),
           });
         }

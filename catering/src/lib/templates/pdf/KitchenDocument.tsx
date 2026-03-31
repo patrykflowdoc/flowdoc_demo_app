@@ -32,13 +32,13 @@ export function KitchenDocument({ order }: { order: PdfOrderDocumentData }) {
         <View>
           <View style={pdfStyles.tableHead}>
             <Text style={[pdfStyles.tableHeadCell, { flex: 2 }]}>Danie</Text>
-            <Text style={[pdfStyles.tableHeadCell, { flex: 1, textAlign: "right" }]}>Ilość</Text>
-            <Text style={[pdfStyles.tableHeadCell, { flex: 1.2 }]}>Źródło</Text>
+            <Text style={[pdfStyles.tableHeadCell, { flex: 1 }]}>Ilość</Text>
+            <Text style={[pdfStyles.tableHeadCell, { flex: 1 }]}>Źródło</Text>
           </View>
           {dishes.map((d, i) => (
             <View key={i} style={pdfStyles.tableRow} wrap={false}>
               <Text style={{ flex: 2, fontSize: 9 }}>{d.name}</Text>
-              <Text style={{ flex: 1, fontSize: 9, textAlign: "right" }}>
+              <Text style={{ flex: 1, fontSize: 9 }}>
                 {d.totalQty} {d.unit}
               </Text>
               <Text style={{ flex: 1.2, fontSize: 9, color: pdfColors.mutedText }}>{d.source || "—"}</Text>
