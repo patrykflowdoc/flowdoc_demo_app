@@ -58,6 +58,7 @@ export async function submitOrder(
         quantity: qty,
         unit: "szt.",
         dishId: variant.dish.id,
+        converter: product.converter ?? 1,
         pricePerUnit: price,
       });
     }
@@ -83,10 +84,16 @@ export async function submitOrder(
           const group = product.optionGroups.find((g) => g.id === groupId);
           return (optionIds ?? []).map((optionId) => {
             const option = group?.options.find((o) => o.id === optionId);
+            const optionConverter = option?.converter ?? 1;
+            const groupConverter = group?.converter ?? 1;
             return {
               name: group?.name ? `${group.name}: ${option?.name ?? optionId}` : (option?.name ?? optionId),
               quantity: data.quantity,
               unit: "os.",
+              dishId: option?.dish?.id,
+              converter: optionConverter !== 1 ? optionConverter : groupConverter,
+              optionConverter,
+              groupConverter,
             };
           });
         });

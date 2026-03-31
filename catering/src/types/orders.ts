@@ -8,6 +8,9 @@ export type OrderSubItem = {
   name: string;
   quantity: number;
   unit: string;
+  converter?: number;
+  optionConverter?: number;
+  groupConverter?: number;
   foodCostPerUnit?: number;
   dishId?: string;
   pricePerUnit?: number;

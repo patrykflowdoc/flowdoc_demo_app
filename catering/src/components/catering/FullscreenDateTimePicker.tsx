@@ -103,6 +103,7 @@ export function FullscreenDateTimePicker({
             selected={tempDate}
             onSelect={setTempDate}
             locale={pl}
+            captionLayout="label"
             disabled={isDisabled}
             modifiers={{
               busy: (date) => isBusy(date) && !isDisabled(date),
@@ -118,9 +119,9 @@ export function FullscreenDateTimePicker({
               month: "space-y-3",
               month_caption: "flex justify-center pt-1 relative items-center",
               caption_label: "text-base font-semibold",
-              nav: "space-x-1 flex items-center",
-              button_previous: "h-8 w-8 bg-transparent p-0 opacity-50 hover:opacity-100 inline-flex items-center justify-center absolute left-0",
-              button_next: "h-8 w-8 bg-transparent p-0 opacity-50 hover:opacity-100 inline-flex items-center justify-center absolute right-0",
+              nav: "space-x-1 flex items-center justify-between",
+              button_previous: "h-12 w-12 rounded-full  bg-background/80 text-foreground shadow-sm backdrop-blur-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 inline-flex items-center justify-center",
+              button_next: "h-12 w-12 rounded-full  bg-background/80 text-foreground shadow-sm backdrop-blur-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 inline-flex items-center justify-center",
               month_grid: "w-full border-collapse",
               weekdays: "flex justify-between",
               weekday: "text-muted-foreground flex-1 text-center font-normal text-xs",

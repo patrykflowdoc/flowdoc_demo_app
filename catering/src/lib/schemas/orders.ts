@@ -16,7 +16,12 @@ export const AdminOrderSubItemSchema = z.object({
   name: z.string().default(""),
   quantity: DecimalJson.default(0),
   unit: z.string().default("szt."),
+  converter: DecimalJson.optional(),
+  optionConverter: DecimalJson.optional(),
+  groupConverter: DecimalJson.optional(),
   foodCostPerUnit: DecimalJson.optional(),
+  dishId: z.string().nullable().optional(),
+  pricePerUnit: DecimalJson.optional(),
 });
 
 export const AdminOrderItemSchema = z.object({
@@ -24,6 +29,7 @@ export const AdminOrderItemSchema = z.object({
   name: z.string().default(""),
   quantity: DecimalJson.default(1),
   unit: z.string().default("szt."),
+  dishId: z.string().nullable().optional(),
   pricePerUnit: DecimalJson.default(0),
   total: DecimalJson.default(0),
   itemType: z.string().default("simple"),

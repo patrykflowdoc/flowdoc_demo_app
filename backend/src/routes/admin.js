@@ -28,6 +28,7 @@ const bundlePatchSchema = z
     vatRate: z.coerce.number().optional(),
     priceBrutto: z.coerce.number().optional(),
     basePrice: z.coerce.number().optional(),
+    converter: z.coerce.number().optional(),
     minQuantity: z.coerce.number().optional(),
     icon: z.string().optional(),
     dietaryTags: z.array(z.string()).optional(),
@@ -67,7 +68,7 @@ function pickWithSnakeFallback(obj, keys) {
 
 const BUNDLE_PATCH_KEYS = [
   "name", "description", "longDescription", "imageUrl", "categorySlug",
-  "priceNetto", "vatRate", "priceBrutto", "basePrice", "minQuantity", "icon", "dietaryTags",
+  "priceNetto", "vatRate", "priceBrutto", "basePrice", "converter", "minQuantity", "icon", "dietaryTags",
 ];
 
 const CONFIGURABLE_SET_PATCH_KEYS = [
@@ -274,6 +275,9 @@ router.patch("/orders/:id", requireCsrf, async (req, res) => {
             unit: s.unit,
             foodCostPerUnit: numOrAdminOrder(s.foodCostPerUnit, 0),
             pricePerUnit: numOrAdminOrder(s.pricePerUnit, 0),
+            converter: numOrAdminOrder(s.converter, 1),
+            optionConverter: numOrAdminOrder(s.optionConverter, 1),
+            groupConverter: numOrAdminOrder(s.groupConverter, 1),
             dishId: s.dishId ? String(s.dishId) : null,
           })),
         });
@@ -360,6 +364,7 @@ router.get("/catalog", async (_req, res) => {
       id: b.id,
       name: b.name,
       base_price: decimalToNum(b.basePrice),
+      converter: toNum(b.converter) ?? 1,
       bundle_variants: (b.bundleVariants ?? []).map((v) => ({
         id: v.id,
         name: v.name,
@@ -377,10 +382,12 @@ router.get("/catalog", async (_req, res) => {
         min_selections: g.minSelections,
         max_selections: g.maxSelections,
         sort_order: g.sortOrder,
+        converter: toNum(g.converter) ?? 1,
         config_group_options: (g.options ?? []).map((o) => ({
           id: o.id,
           name: o.name,
           sort_order: o.sortOrder,
+          converter: toNum(o.converter) ?? 1,
         })),
       })),
     })),
@@ -1052,6 +1059,7 @@ router.post("/bundles", requireCsrf, async (req, res) => {
     vatRate: Number(b.vatRate ?? 8),
     priceBrutto: Number(b.priceBrutto ?? 0),
     basePrice: Number(b.basePrice ?? b.base_price ?? 0),
+    converter: Number(b.converter ?? 1),
     minQuantity: Number(b.minQuantity ?? 1),
     icon: b.icon ?? "🍽️",
     dietaryTags: Array.isArray(b.dietary_tags ?? b.dietaryTags) ? (b.dietary_tags ?? b.dietaryTags) : [],
@@ -1158,7 +1166,7 @@ router.post("/configurable-sets", requireCsrf, async (req, res) => {
           minSelections: Number(g.minSelections ?? 1),
           maxSelections: Number(g.maxSelections ?? 3),
           sortOrder: Number(g.sortOrder ?? 0),
-          conventer: Number(g.conventer ?? 1),
+          converter: Number(g.converter ?? 1),
         },
       });
       if (Array.isArray(g.configGroupOptions) && g.configGroupOptions.length > 0) {
@@ -1170,7 +1178,7 @@ router.post("/configurable-sets", requireCsrf, async (req, res) => {
             allergens: Array.isArray(o.allergens) ? o.allergens : [],
             dietaryTags: Array.isArray(o.dietaryTags) ? (o.dietaryTags) : [],
             sortOrder: o.sortOrder ?? i,
-            conventer: Number(o.conventer ?? 1),
+            converter: Number(o.converter ?? 1),
           })),
         });
       }
@@ -1212,7 +1220,7 @@ router.patch("/configurable-sets/:id", requireCsrf, async (req, res) => {
           minSelections: Number(g.minSelections ?? 1),
           maxSelections: Number(g.maxSelections ?? 3),
           sortOrder: Number(g.sortOrder ?? 0),
-          conventer: Number(g.conventer ?? 1),
+          converter: Number(g.converter ?? 1),
         },
       });
       if (Array.isArray(g.configGroupOptions) && g.configGroupOptions.length > 0) {
@@ -1224,7 +1232,7 @@ router.patch("/configurable-sets/:id", requireCsrf, async (req, res) => {
             allergens: Array.isArray(o.allergens) ? o.allergens : [],
             dietaryTags: Array.isArray(o.dietaryTags) ? (o.dietaryTags) : [],
             sortOrder: o.sortOrder ?? i,
-            conventer: Number(o.conventer ?? 1),
+            converter: Number(o.converter ?? 1),
           })),
         });
       }

@@ -69,7 +69,7 @@ export function CateringWizard() {
 
   // Filter categories based on selected event type mappings
   const filteredCategories = useMemo(() => {
-    if (!order.eventType) return categories;
+    if (!order.eventType?.id) return categories;
     const mappedCategoryIds = eventCategoryMappings
       .filter((m) => m.event_type_id === order.eventType.id)
       .map((m) => m.category_id);
@@ -86,7 +86,7 @@ export function CateringWizard() {
 
   // Filter extras categories based on selected event type mappings
   const filteredExtrasCategories = useMemo(() => {
-    if (!order.eventType) return [];
+    if (!order.eventType?.id) return [];
     const mappedExtrasCategoryIds = eventExtrasCategoryMappings
       .filter((m) => m.eventTypeId === order.eventType.id)
       .map((m) => m.extrasCategoryId);
@@ -187,7 +187,7 @@ export function CateringWizard() {
     const errors: string[] = [];
     if (currentStep === 0) {
       if (!order.guestCount || order.guestCount <= 0) errors.push("Podaj liczbę gości");
-      if (!order.eventType) errors.push("Wybierz rodzaj wydarzenia");
+      if (!order.eventType?.id) errors.push("Wybierz rodzaj wydarzenia");
       if (!order.eventDate) errors.push("Wybierz datę wydarzenia");
     }
     if (currentStep === 2) {
@@ -268,7 +268,7 @@ export function CateringWizard() {
           <EventDetails
             cateringType={order.cateringType}
             guestCount={order.guestCount}
-            eventType={eventTypes.find((e) => e.id === order.eventType.id) ?? eventTypes[0]}
+            eventType={order.eventType}
             eventDate={order.eventDate}
             eventTime={order.eventTime}
             onCateringTypeChange={(type) => updateOrder({ cateringType: type })}

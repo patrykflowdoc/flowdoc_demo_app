@@ -201,6 +201,9 @@ export interface SubmitOrderPayload {
       name: string;
       quantity: number;
       unit?: string;
+      converter?: number;
+      optionConverter?: number;
+      groupConverter?: number;
       foodCostPerUnit?: number;
       pricePerUnit?: number;
       dishId?: string;
@@ -280,7 +283,7 @@ export async function deleteAdminOrder(id: string): Promise<void> {
 
 export async function getAdminCatalog(): Promise<{
   dishes: Array<{ id: string; name: string; unit_label: string; price_per_unit: number; price_brutto: number }>;
-  bundles: Array<{ id: string; name: string; base_price: number; bundle_variants: Array<{ id: string; name: string; price: number; sort_order: number }> }>;
+  bundles: Array<{ id: string; name: string; base_price: number; converter?: number; bundle_variants: Array<{ id: string; name: string; price: number; sort_order: number }> }>;
   configurable_sets: Array<{
     id: string;
     name: string;
@@ -291,7 +294,8 @@ export async function getAdminCatalog(): Promise<{
       min_selections: number;
       max_selections: number;
       sort_order: number;
-      config_group_options: Array<{ id: string; name: string; sort_order: number }>;
+      converter?: number;
+      config_group_options: Array<{ id: string; name: string; sort_order: number; converter?: number }>;
     }>;
   }>;
   extras: Array<{ id: string; name: string; price: number; unit_label: string; category: string }>;

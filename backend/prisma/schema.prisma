@@ -174,7 +174,7 @@ model Bundle {
   minQuantity     Int      @default(1)
   icon            String   @default("🍽️")
   dietaryTags     String[] @default([])
-  conventer       Float?   @default(1)
+  converter       Float?   @default(1)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -229,7 +229,7 @@ model ConfigGroup {
   minSelections Int     @default(1)
   maxSelections Int     @default(3)
   sortOrder     Int     @default(0)
-  conventer     Float?  @default(1)
+  converter     Float?  @default(1)
 
   set     ConfigurableSet    @relation(fields: [setId], references: [id], onDelete: Cascade)
   options ConfigGroupOption[]
@@ -245,7 +245,7 @@ model ConfigGroupOption {
   allergens   String[] @default([])
   dietaryTags String[] @default([])
   sortOrder   Int      @default(0)
-  conventer   Float?   @default(1)
+  converter   Float?   @default(1)
 
   group ConfigGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
   dish  Dish?       @relation(fields: [dishId], references: [id])
@@ -462,6 +462,9 @@ model OrderItemSubItem {
   unit            String  @default("szt.")
   foodCostPerUnit Decimal?
   pricePerUnit    Float? @default(0)
+  converter       Float?  @default(1)
+  optionConverter Float?  @default(1)
+  groupConverter  Float?  @default(1)
   dishId          String?
 
   orderItem OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)

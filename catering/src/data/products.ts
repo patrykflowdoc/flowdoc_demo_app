@@ -29,6 +29,7 @@ export type ExpandableProduct = {
   image?: string;
   basePrice: number;
   minQuantity: number;
+  converter?: number;
   category: string;
   dietaryTags: string[];
   variants: ProductVariant[];
@@ -69,12 +70,14 @@ export type OptionGroup = {
   name: string;
   minSelections: number;
   maxSelections: number;
+  converter?: number;
   options: GroupOption[];
 };
 
 export type GroupOption = {
   id: string;
   name: string;
+  converter?: number;
   allergens: string[];
   dietaryTags: string[];
   dish: {

@@ -22,10 +22,10 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import {
   effectiveLineItemType,
   isAddonLineItem,
-  isExpandableLineItem,
   isFoodCostEligibleLineItem,
   splitPrimaryAndAddonItems,
 } from "@/lib/orderLineItems";
+import { calculateKitchenRows } from "@/lib/templates/pdf/kitchenCalc";
 import type {
   DbClient,
   FoodCostExtra,
@@ -110,24 +110,7 @@ const OrderDocumentView = ({ order, docType, onBack }: { order: Order; docType: 
     toast.success("Pozycje kosztowe zapisane");
   };
 
-  type KitchenDishRow = { name: string; totalQty: number; unit: string; source: string };
-  const dishMap: Record<string, KitchenDishRow> = {};
-  order.items.forEach((item) => {
-    const t = effectiveLineItemType(item);
-    if (isAddonLineItem(t)) return;
-    if (isExpandableLineItem(t) && item.subItems) {
-      item.subItems.forEach((sub) => {
-        const key = sub.dishId ?? sub.name;
-        if (!dishMap[key]) dishMap[key] = { name: sub.name, totalQty: 0, unit: sub.unit, source: item.name };
-        dishMap[key].totalQty += sub.quantity;
-      });
-    } else {
-      const key = item.name;
-      if (!dishMap[key]) dishMap[key] = { name: item.name, totalQty: 0, unit: item.unit, source: "" };
-      dishMap[key].totalQty += item.quantity;
-    }
-  });
-  const kitchenDishes = Object.values(dishMap).sort((a, b) => a.name.localeCompare(b.name, "pl"));
+  const kitchenDishes = calculateKitchenRows(order.items);
 
   // Food cost
   const foodCostItems = order.items.filter(isFoodCostEligibleLineItem).map((item) => {
@@ -631,7 +614,23 @@ const OrderDetailView = ({ order, onBack, onEdit, onGenerateDoc, onLinkClient }:
 };
 
 // ===== DYNAMIC PRODUCT CATALOG =====
-type CatalogProduct = { id: string; name: string; unit: string; defaultPrice: number; type: string; variants?: { id: string; name: string; price: number }[]; optionGroups?: { id: string; name: string; minSelections: number; maxSelections: number; options: { id: string; name: string }[] }[] };
+type CatalogProduct = {
+  id: string;
+  name: string;
+  unit: string;
+  defaultPrice: number;
+  type: string;
+  converter?: number;
+  variants?: { id: string; name: string; price: number }[];
+  optionGroups?: {
+    id: string;
+    name: string;
+    minSelections: number;
+    maxSelections: number;
+    converter?: number;
+    options: { id: string; name: string; converter?: number }[];
+  }[];
+};
 
 function useCatalogProducts() {
   const [catalog, setCatalog] = useState<CatalogProduct[]>([]);
@@ -643,12 +642,26 @@ function useCatalogProducts() {
       }
       for (const b of data.bundles ?? []) {
         const variants = (b.bundle_variants ?? []).sort((a, b) => a.sort_order - b.sort_order).map((v) => ({ id: v.id, name: v.name, price: v.price }));
-        items.push({ id: b.id, name: b.name, unit: "szt.", defaultPrice: Number(b.base_price), type: "bundle", variants });
+        items.push({
+          id: b.id,
+          name: b.name,
+          unit: "szt.",
+          defaultPrice: Number(b.base_price),
+          type: "bundle",
+          converter: Number(b.converter ?? 1),
+          variants,
+        });
       }
       for (const s of data.configurable_sets ?? []) {
         const optionGroups = (s.config_groups ?? []).sort((a, b) => a.sort_order - b.sort_order).map((g) => ({
-          id: g.id, name: g.name, minSelections: g.min_selections, maxSelections: g.max_selections,
-          options: (g.config_group_options ?? []).sort((a, b) => a.sort_order - b.sort_order).map((o) => ({ id: o.id, name: o.name })),
+          id: g.id,
+          name: g.name,
+          minSelections: g.min_selections,
+          maxSelections: g.max_selections,
+          converter: Number(g.converter ?? 1),
+          options: (g.config_group_options ?? [])
+            .sort((a, b) => a.sort_order - b.sort_order)
+            .map((o) => ({ id: o.id, name: o.name, converter: Number(o.converter ?? 1) })),
         }));
         items.push({ id: s.id, name: s.name, unit: "os.", defaultPrice: Number(s.price_per_person), type: "configurable", optionGroups });
       }
@@ -679,7 +692,7 @@ const SubItemSelector = ({ product, onConfirm, onCancel }: {
         .filter(([, qty]) => qty > 0)
         .map(([vId, qty]) => {
           const v = product.variants!.find(v => v.id === vId)!;
-          return { id: vId, name: v.name, quantity: qty, unit: "szt." };
+          return { id: vId, name: v.name, quantity: qty, unit: "szt.", converter: Number(product.converter ?? 1) };
         });
       onConfirm(subs);
     };
@@ -719,7 +732,19 @@ const SubItemSelector = ({ product, onConfirm, onCancel }: {
         const ids = selectedOptions[g.id] || [];
         for (const id of ids) {
           const opt = g.options.find(o => o.id === id);
-          if (opt) subs!.push({ id: id, name: `${g.name}: ${opt.name}`, quantity: 1, unit: "szt." });
+          if (opt) {
+            const optionConverter = Number(opt.converter ?? 1);
+            const groupConverter = Number(g.converter ?? 1);
+            subs!.push({
+              id: id,
+              name: `${g.name}: ${opt.name}`,
+              quantity: 1,
+              unit: "szt.",
+              converter: optionConverter !== 1 ? optionConverter : groupConverter,
+              optionConverter,
+              groupConverter,
+            });
+          }
         }
       }
       onConfirm(subs);
@@ -1838,7 +1863,14 @@ const OrdersView = () => {
 
       const mapped: Order[] = dbOrders.map((o) => {
         const orderItems = o.orderItems ?? [];
-        const items: OrderItem[] = orderItems;
+        const items: OrderItem[] = orderItems.map((item) => ({
+          ...item,
+          dishId: (item as { dishId?: string | null }).dishId ?? undefined,
+          subItems: (item.subItems ?? []).map((sub) => ({
+            ...sub,
+            dishId: sub.dishId ?? undefined,
+          })),
+        }));
         return {
           id: String(o.orderNumber ?? ""),
           dbId: String(o.id ?? ""),
@@ -1942,6 +1974,9 @@ const OrdersView = () => {
               name: sub.name,
               quantity: sub.quantity,
               unit: sub.unit,
+              converter: sub.converter ?? 1,
+              optionConverter: sub.optionConverter ?? 1,
+              groupConverter: sub.groupConverter ?? 1,
               foodCostPerUnit: sub.foodCostPerUnit ?? 0,
               pricePerUnit: sub.pricePerUnit ?? 0,
               ...(sub.dishId ? { dishId: sub.dishId } : {}),

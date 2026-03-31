@@ -126,6 +126,7 @@ router.get("/products", async (_req, res) => {
       minQuantity: b.minQuantity ?? 1,
       category: b.categorySlug ?? "mini",
       dietaryTags: b.dietaryTags ?? [],
+      converter: toNum(b.converter) ?? 1,
       variants,
     });
   }));
@@ -136,11 +137,13 @@ router.get("/products", async (_req, res) => {
       name: g.name,
       minSelections: g.minSelections ?? 1,
       maxSelections: g.maxSelections ?? 3,
+      converter: toNum(g.converter) ?? 1,
       options: (g.options ?? []).map((o) => ({
         id: o.id,
         name: o.name,
         allergens: o.allergens ?? [],
         dietaryTags: o.dietaryTags ?? [],
+        converter: toNum(o.converter) ?? 1,
         dish: {
           id: o.dish.id,
           bail: toNum(o.dish.bail)

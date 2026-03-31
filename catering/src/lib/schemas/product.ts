@@ -3,6 +3,7 @@ import { z } from "zod";
 export const GroupOptionSchema = z.object({
   id: z.string(),
   name: z.string(),
+  converter: z.number().optional(),
   allergens: z.array(z.string()),
   dietaryTags: z.array(z.string()),
   dish: z.object({
@@ -16,6 +17,7 @@ export const OptionGroupSchema = z.object({
   name: z.string(),
   minSelections: z.number(),
   maxSelections: z.number(),
+  converter: z.number().optional(),
   options: z.array(GroupOptionSchema),
 });
 
@@ -60,6 +62,7 @@ export const ExpandableProductSchema = z.object({
   image: z.string().optional(),
   basePrice: z.number(),
   minQuantity: z.number(),
+  converter: z.number().optional(),
   category: z.string(),
   dietaryTags: z.array(z.string()),
   variants: z.array(ProductVariantSchema),

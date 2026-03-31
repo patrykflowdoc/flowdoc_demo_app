@@ -60,13 +60,13 @@ interface Bundle {
 
 interface ConfigGroupOption {
   id: string; name: string; allergens: string[]; dietaryTags: string[]; sortOrder: number;
-  conventer: number;
+  converter: number;
   dishId: string | null;
 }
 
 interface ConfigGroup {
   id: string; name: string; minSelections: number; maxSelections: number;
-  options: ConfigGroupOption[]; sortOrder: number; conventer: number;
+  options: ConfigGroupOption[]; sortOrder: number; converter: number;
 }
 
 interface ConfigSet {
@@ -1199,7 +1199,7 @@ const ConfigSetsTab = ({ configSets, dishes, categories, reload }: { configSets:
   const [formCategorySlug, setFormCategorySlug] = useState<string | null>(null);
   const [formGroups, setFormGroups] = useState<ConfigGroup[]>([]);
   const [formDietaryTags, setFormDietaryTags] = useState<string[]>([]);
-  const [groupDishConventer, setGroupDishConventer] = useState<string>("1.0");
+  const [groupDishConverter, setGroupDishConverter] = useState<string>("1.0");
 
 
   // Group form
@@ -1208,7 +1208,7 @@ const ConfigSetsTab = ({ configSets, dishes, categories, reload }: { configSets:
   const [groupName, setGroupName] = useState("");
   const [groupMin, setGroupMin] = useState("1");
   const [groupMax, setGroupMax] = useState("3");
-  const [groupConventer, setGroupConventer] = useState<string>("1.0");
+  const [groupConverter, setGroupConverter] = useState<string>("1.0");
   const [groupOptions, setGroupOptions] = useState<ConfigGroupOption[]>([]);
 
   // Option: pick from dishes
@@ -1216,7 +1216,7 @@ const ConfigSetsTab = ({ configSets, dishes, categories, reload }: { configSets:
 
   const resetGroupForm = () => {
     setGroupName(""); setGroupMin("1"); setGroupMax("3"); setGroupOptions([]);
-    setGroupConventer("1.0"); setGroupDishConventer("1.0");
+    setGroupConverter("1.0"); setGroupDishConverter("1.0");
     setShowGroupForm(false); setEditingGroupId(null); setShowDishPickerForGroup(false);
   };
   const resetForm = () => {
@@ -1235,7 +1235,7 @@ const ConfigSetsTab = ({ configSets, dishes, categories, reload }: { configSets:
       id: randomUUID(), name: dish.name,
       allergens: [...dish.allergens], dietaryTags: [...dish.dietaryTags], sortOrder: groupOptions.length,
       dishId: dish.id,
-      conventer: Number(groupDishConventer),
+      converter: Number(groupDishConverter),
     }]);
     setShowDishPickerForGroup(false);
   };
@@ -1246,7 +1246,7 @@ const ConfigSetsTab = ({ configSets, dishes, categories, reload }: { configSets:
       id: editingGroupId || randomUUID(), name: groupName.trim(),
       minSelections: parseInt(groupMin) || 1, maxSelections: parseInt(groupMax) || 3,
       options: groupOptions, sortOrder: formGroups.length,
-      conventer: Number(groupConventer),
+      converter: Number(groupConverter),
     };
     if (editingGroupId) setFormGroups(formGroups.map(fg => fg.id === editingGroupId ? g : fg));
     else setFormGroups([...formGroups, g]);
@@ -1255,7 +1255,7 @@ const ConfigSetsTab = ({ configSets, dishes, categories, reload }: { configSets:
 
   const editGroup = (g: ConfigGroup) => {
     setEditingGroupId(g.id); setGroupName(g.name); setGroupMin(g.minSelections.toString());
-    setGroupMax(g.maxSelections.toString()); setGroupConventer((g.conventer ?? 1).toString());
+    setGroupMax(g.maxSelections.toString()); setGroupConverter((g.converter ?? 1).toString());
     setGroupOptions([...g.options]); setShowGroupForm(true);
   };
 
@@ -1285,14 +1285,14 @@ const ConfigSetsTab = ({ configSets, dishes, categories, reload }: { configSets:
       minSelections: g.minSelections,
       maxSelections: g.maxSelections,
       sortOrder: gi,
-      conventer: g.conventer,
+      converter: g.converter,
       configGroupOptions: g.options.map((o, oi) => ({
         name: o.name,
         allergens: o.allergens ?? [],
         dietaryTags: o.dietaryTags ?? [],
         sortOrder: oi,
         dishId: o.dishId || null,
-        conventer: o.conventer,
+        converter: o.converter,
       })),
     }));
     try {
@@ -1383,7 +1383,7 @@ const ConfigSetsTab = ({ configSets, dishes, categories, reload }: { configSets:
                     <div>
                       <span className="text-sm font-medium">{g.name}</span>
                       <span className="text-xs text-muted-foreground ml-2">(wybór: {g.minSelections}–{g.maxSelections})</span>
-                      <span className="text-xs text-muted-foreground ml-2">(x{g.conventer})</span>
+                      <span className="text-xs text-muted-foreground ml-2">(x{g.converter})</span>
                     </div>
                     <div className="flex gap-1">
                       <button onClick={() => editGroup(g)} className="p-1 text-muted-foreground hover:text-foreground"><Pencil className="w-3.5 h-3.5" /></button>
@@ -1395,7 +1395,7 @@ const ConfigSetsTab = ({ configSets, dishes, categories, reload }: { configSets:
                     {g.options.map((o) => (
                       <Badge key={o.id} variant="secondary" className="text-[10px]">
                         {o.dishId && "🔗 "}{o.name}
-                        {o.allergens.length > 0 && <span className="ml-1 opacity-60">(x{o.conventer})</span>}
+                        {o.allergens.length > 0 && <span className="ml-1 opacity-60">(x{o.converter})</span>}
                       </Badge>
                     ))}
                   </div>
@@ -1420,7 +1420,7 @@ const ConfigSetsTab = ({ configSets, dishes, categories, reload }: { configSets:
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Przelicznik</Label>
-                    <Input type="number" step="0.5" value={groupConventer} onChange={(e) => setGroupConventer(e.target.value)} />
+                    <Input type="number" step="0.5" value={groupConverter} onChange={(e) => setGroupConverter(e.target.value)} />
                   </div>
 
                   {/* Options from dishes */}
@@ -1435,7 +1435,7 @@ const ConfigSetsTab = ({ configSets, dishes, categories, reload }: { configSets:
                     {groupOptions.map((o) => (
                       <div key={o.id} className="flex items-center justify-between px-2 py-1.5 rounded bg-muted/30 text-xs">
                         <span>{o.dishId && "🔗 "}{o.name} {o.allergens.length > 0 && <span className="text-muted-foreground">({o.allergens.join(", ")})</span>}</span>
-                        <span className="text-xs text-muted-foreground">({o.conventer})</span>
+                        <span className="text-xs text-muted-foreground">({o.converter})</span>
                         <button onClick={() => setGroupOptions(groupOptions.filter(go => go.id !== o.id))} className="text-muted-foreground hover:text-destructive"><X className="w-3 h-3" /></button>
                       </div>
                     ))}
@@ -1445,7 +1445,7 @@ const ConfigSetsTab = ({ configSets, dishes, categories, reload }: { configSets:
                       <DishPicker dishes={dishes} selectedDishId={null} onSelect={addDishAsOption} />
                       <div className="space-y-1">
                         <Label className="text-xs">Przelicznik dla dania</Label>
-                      <Input type="number" step="0.5" value={groupDishConventer} onChange={(e) => setGroupDishConventer(e.target.value)} />
+                      <Input type="number" step="0.5" value={groupDishConverter} onChange={(e) => setGroupDishConverter(e.target.value)} />
                       </div>
                       </>
                     )}
@@ -1642,7 +1642,7 @@ const SettingsDishesView = () => {
               minSelections: Number(g.minSelections ?? g.min_selections ?? 1),
               maxSelections: Number(g.maxSelections ?? g.max_selections ?? 3),
               sortOrder: Number(g.sortOrder ?? g.sort_order ?? 0),
-              conventer: Number(g.conventer),
+              converter: Number(g.converter),
               options: sortedOpts.map((o: Record<string, unknown>) => ({
                 id: String(o.id),
                 name: String(o.name ?? ""),
@@ -1650,7 +1650,7 @@ const SettingsDishesView = () => {
                 dietaryTags: (o.dietaryTags as string[]) ?? (o.dietary_tags as string[]) ?? [],
                 sortOrder: Number(o.sortOrder ?? o.sort_order ?? 0),
                 dishId: (o.dishId ?? o.dish_id ?? null) as string | null,
-                conventer: Number(o.conventer),
+                converter: Number(o.converter),
               })),
             };
           }),

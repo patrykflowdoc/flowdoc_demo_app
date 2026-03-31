@@ -153,7 +153,7 @@ export function EventDetails({
         <CardContent>
           <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
             {eventTypes.filter((type) => type.isCatering === (cateringType === "wyjazdowy")).map((type) => {
-              const isSelected = eventType === type;
+              const isSelected = eventType?.id === type.id;
               
               return (
                 <button
