@@ -1,5 +1,23 @@
 // ============= PRODUCT TYPES =============
 
+export type Dish = {
+  type: string;
+  id: string;
+  name: string;
+  description: string;
+  longDescription?: string;
+  image?: string;
+  contents: string[];
+  allergens: string[];
+  dietaryTags: string[];
+  pricePerUnit: number;
+  pricePerUnitOnSite?: number | null;
+  unitLabel: string;
+  minQuantity: number;
+  category: string;
+  bail: number;
+};
+
 // Type 1: Simple Product (Patery) - just display, add to cart
 export type SimpleProduct = {
   type: "simple";

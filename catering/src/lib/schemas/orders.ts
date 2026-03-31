@@ -11,6 +11,9 @@ const DecimalJson = z
     return Number.isFinite(n) ? n : 0;
   });
 
+/** Prisma Dish row joined on order lines (camelCase). Passthrough for extra fields. */
+export const AdminOrderDishSchema = z.object({ id: z.string() }).passthrough().nullable().optional();
+
 export const AdminOrderSubItemSchema = z.object({
   id: z.string().optional(),
   name: z.string().default(""),
@@ -22,6 +25,7 @@ export const AdminOrderSubItemSchema = z.object({
   foodCostPerUnit: DecimalJson.optional(),
   dishId: z.string().nullable().optional(),
   pricePerUnit: DecimalJson.optional(),
+  dish: AdminOrderDishSchema,
 });
 
 export const AdminOrderItemSchema = z.object({
@@ -35,6 +39,7 @@ export const AdminOrderItemSchema = z.object({
   itemType: z.string().default("simple"),
   foodCostPerUnit: DecimalJson.optional(),
   subItems: z.array(AdminOrderSubItemSchema).nullable().default([]),
+  dish: AdminOrderDishSchema,
 });
 
 export const AdminFoodCostExtraSchema = z.object({

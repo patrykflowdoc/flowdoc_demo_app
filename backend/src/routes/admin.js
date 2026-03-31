@@ -208,6 +208,33 @@ router.delete("/clients/:id", requireCsrf, async (req, res) => {
   res.status(204).send();
 });
 
+/** Fields joined for admin order lines (PDF offer: dish.contents, etc.). */
+const ORDER_ITEM_DISH_SELECT = {
+  id: true,
+  name: true,
+  description: true,
+  longDescription: true,
+  imageUrl: true,
+  categorySlug: true,
+  productType: true,
+  pricePerUnit: true,
+  pricePerUnitOnSite: true,
+  unitLabel: true,
+  minQuantity: true,
+  bail: true,
+  contents: true,
+  dietaryTags: true,
+  allergens: true,
+};
+
+const ORDER_ITEMS_INCLUDE = {
+  orderBy: { sortOrder: "asc" },
+  include: {
+    subItems: { include: { dish: { select: ORDER_ITEM_DISH_SELECT } } },
+    dish: { select: ORDER_ITEM_DISH_SELECT },
+  },
+};
+
 // ─── Orders (list, one, update) ───────────────────────────────────────
 /** GET /api/admin/orders */
 router.get("/orders", async (_req, res) => {
@@ -216,7 +243,7 @@ router.get("/orders", async (_req, res) => {
     include: {
       client: true,
       deliveryZone: true,
-      orderItems: { orderBy: { sortOrder: "asc" }, include: { subItems: true } },
+      orderItems: ORDER_ITEMS_INCLUDE,
       orderFoodCostExtras: true,
     },
   });
@@ -230,7 +257,7 @@ router.get("/orders/:id", async (req, res) => {
     include: {
       client: true,
       deliveryZone: true,
-      orderItems: { orderBy: { sortOrder: "asc" }, include: { subItems: true } },
+      orderItems: ORDER_ITEMS_INCLUDE,
       orderFoodCostExtras: true,
     },
   });
@@ -302,7 +329,7 @@ router.patch("/orders/:id", requireCsrf, async (req, res) => {
     where: { id },
     include: {
       client: true,
-      orderItems: { include: { subItems: true } },
+      orderItems: ORDER_ITEMS_INCLUDE,
       orderFoodCostExtras: true,
     },
   });

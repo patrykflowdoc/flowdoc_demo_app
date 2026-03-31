@@ -1,9 +1,11 @@
 import { Document, Page, Text, View } from "@react-pdf/renderer";
-import { effectiveLineItemType, isAddonLineItem, isExpandableLineItem, isFoodCostEligibleLineItem } from "@/lib/orderLineItems";
+import { isFoodCostEligibleLineItem } from "@/lib/orderLineItems";
 import type { PdfOrderDocumentData } from "@/types/orders";
 import { fmtPdfNum } from "./fmt";
 import { PdfDocHeader } from "./components";
 import { pdfStyles } from "./styles";
+import { calculateKitchenRows } from "./kitchenCalc";
+import { KitchenDishTable } from "./KitchenDocument";
 import { groupOrdersByDate, parseDateForGrouping, type SummaryDocType } from "./summaryHelpers";
 import { OfferDocument } from "./OfferDocument";
 
@@ -76,26 +78,7 @@ export function SummaryDocument({
           <PdfDocHeader title="Lista dań — podsumowanie" subtitle={subtitle} />
           {Array.from(grouped.entries()).flatMap(([date, dateOrders]) => {
             const dayLabel = parseDateForGrouping(date);
-            type DishEntry = { name: string; totalQty: number; unit: string; source: string };
-            const dishMap: Record<string, DishEntry> = {};
-            dateOrders.forEach((o) => {
-              o.items.forEach((item) => {
-                const t = effectiveLineItemType(item);
-                if (isAddonLineItem(t)) return;
-                if (isExpandableLineItem(t) && item.subItems) {
-                  item.subItems.forEach((sub) => {
-                    const key = `${sub.name}__dish`;
-                    if (!dishMap[key]) dishMap[key] = { name: sub.name, totalQty: 0, unit: sub.unit, source: item.name };
-                    dishMap[key].totalQty += sub.quantity;
-                  });
-                } else {
-                  const key = `${item.name}__dish`;
-                  if (!dishMap[key]) dishMap[key] = { name: item.name, totalQty: 0, unit: item.unit, source: "" };
-                  dishMap[key].totalQty += item.quantity;
-                }
-              });
-            });
-            const dishes = Object.values(dishMap).sort((a, b) => a.name.localeCompare(b.name, "pl"));
+            const dishes = calculateKitchenRows(dateOrders.flatMap((o) => o.items));
             if (dishes.length === 0) return [];
             const guestSum = dateOrders.reduce((s, o) => s + o.guestCount, 0);
             return [
@@ -103,20 +86,7 @@ export function SummaryDocument({
                 <Text style={{ fontSize: 12, marginBottom: 4, fontWeight: "bold" }}>
                   Data: {dayLabel} — {dateOrders.length} zam. / {guestSum} gości
                 </Text>
-                <View style={pdfStyles.tableHead}>
-                  <Text style={[pdfStyles.tableHeadCell, { flex: 1.6 }]}>Danie</Text>
-                  <Text style={[pdfStyles.tableHeadCell, { flex: 0.6, textAlign: "right" }]}>Ilość</Text>
-                  <Text style={[pdfStyles.tableHeadCell, { flex: 0.5 }]}>Jedn.</Text>
-                  <Text style={[pdfStyles.tableHeadCell, { flex: 1.1 }]}>Źródło</Text>
-                </View>
-                {dishes.map((d, i) => (
-                  <View key={i} style={pdfStyles.tableRow} wrap={false}>
-                    <Text style={{ flex: 1.6, fontSize: 9 }}>{d.name}</Text>
-                    <Text style={{ flex: 0.6, fontSize: 9, textAlign: "right" }}>{String(d.totalQty)}</Text>
-                    <Text style={{ flex: 0.5, fontSize: 9 }}>{d.unit}</Text>
-                    <Text style={{ flex: 1.1, fontSize: 9 }}>{d.source || "—"}</Text>
-                  </View>
-                ))}
+                <KitchenDishTable dishes={dishes} />
               </View>,
             ];
           })}

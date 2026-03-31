@@ -176,14 +176,20 @@ export function OfferItemsTableBlock({ sectionTitle, items }: { sectionTitle: st
               ppu={item.pricePerUnit}
               total={item.total}
             />
+            {(item.dish?.contents ?? []).map((content, ci) => (
+              <SubRow key={`dc-${idx}-${ci}`} label={`  - ${content}`} qtyText="" />
+            ))}
             {subs.length > 0
-              ? subs.map((sub, si) => (
+              ? subs.flatMap((sub, si) => [
                   <SubRow
-                    key={si}
+                    key={`s-${si}`}
                     label={`  - ${sub.name}`}
                     qtyText={`${fmtPdfNum(subQty(sub.quantity))} ${(sub.unit || "szt.").trim()}`}
-                  />
-                ))
+                  />,
+                  ...(sub.dish?.contents ?? []).map((content, ci) => (
+                    <SubRow key={`s-${si}-dc-${ci}`} label={`    · ${content}`} qtyText="" />
+                  )),
+                ])
               : expandable
                 ? <SubRow label={`  - ${SUBROW_NO_DETAILS}`} qtyText="" />
                 : null}

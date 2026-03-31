@@ -1,6 +1,7 @@
 /**
  * Order domain types for admin UI and PDFs (aligned with Prisma JSON shapes from the API).
  */
+import type { Dish } from "@/data/products";
 
 /** PDF / admin line sub-row (OrderItemSubItem). */
 export type OrderSubItem = {
@@ -13,6 +14,7 @@ export type OrderSubItem = {
   groupConverter?: number;
   foodCostPerUnit?: number;
   dishId?: string;
+  dish?: Dish;
   pricePerUnit?: number;
 };
 
@@ -28,6 +30,7 @@ export type OrderItem = {
   itemType?: string;
   foodCostPerUnit?: number;
   dishId?: string;
+  dish?: Dish;
   subItems: OrderSubItem[] | null;
 };
 

@@ -35,7 +35,8 @@ import type {
   OrderItem,
   OrderSubItem,
 } from "@/types/orders";
-import { ProductTable } from "./ProductTable";
+import type { Dish } from "@/data/products";
+import { ProductTable, OrderLineDishContents } from "./ProductTable";
 
 
 const statusColors: Record<OrderStatus, string> = {
@@ -124,6 +125,7 @@ const OrderDocumentView = ({ order, docType, onBack }: { order: Order; docType: 
       totalFoodCost,
       revenue: item.total,
       margin: item.total > 0 ? ((item.total - totalFoodCost) / item.total) * 100 : 0,
+      dishContents: item.dish?.contents,
     };
   });
 
@@ -132,7 +134,6 @@ const OrderDocumentView = ({ order, docType, onBack }: { order: Order; docType: 
   const totalFC = foodCostItems.reduce((s, i) => s + i.totalFoodCost, 0) + extrasTotal;
   const totalRev = foodCostItems.reduce((s, i) => s + i.revenue, 0);
   const totalMargin = totalRev > 0 ? ((totalRev - totalFC) / totalRev) * 100 : 0;
-
   return (
     <div>
       <div className="flex items-center gap-4 mb-6">
@@ -190,7 +191,10 @@ const OrderDocumentView = ({ order, docType, onBack }: { order: Order; docType: 
                     <TableBody>
                       {offerAddons.map((item, i) => (
                         <TableRow key={ i+4}>
-                          <TableCell className="font-medium">{item.name}</TableCell>
+                          <TableCell className="font-medium">
+                            <div>{item.name}</div>
+                            <OrderLineDishContents contents={item.dish?.contents} />
+                          </TableCell>
                           <TableCell className="text-center">{item.quantity} {item.unit}</TableCell>
                           <TableCell className="text-right text-muted-foreground">{fmtNum(item.pricePerUnit)} zł</TableCell>
                           <TableCell className="text-right font-semibold">{fmtNum(item.total)} zł</TableCell>
@@ -277,7 +281,10 @@ const OrderDocumentView = ({ order, docType, onBack }: { order: Order; docType: 
               <TableBody>
                 {foodCostItems.map((item, i) => (
                   <TableRow key={i}>
-                    <TableCell className="font-medium">{item.name}</TableCell>
+                    <TableCell className="font-medium">
+                      <div>{item.name}</div>
+                      <OrderLineDishContents contents={item.dishContents} />
+                    </TableCell>
                     <TableCell className="text-center">{item.quantity} {item.unit}</TableCell>
                     <TableCell className="text-right text-muted-foreground">{fmtNum(item.foodCostPerUnit)} zł</TableCell>
                     <TableCell className="text-right">{fmtNum(item.totalFoodCost)} zł</TableCell>
@@ -570,7 +577,10 @@ const OrderDetailView = ({ order, onBack, onEdit, onGenerateDoc, onLinkClient }:
                   <TableBody>
                     {detailAddons.map((item, i) => (
                       <TableRow key={i}>
-                        <TableCell className="font-medium">{item.name}</TableCell>
+                        <TableCell className="font-medium">
+                          <div>{item.name}</div>
+                          <OrderLineDishContents contents={item.dish?.contents} />
+                        </TableCell>
                         <TableCell className="text-center">{item.quantity} {item.unit}</TableCell>
                         <TableCell className="text-right text-muted-foreground">{item.pricePerUnit.toFixed(2)} zł</TableCell>
                         <TableCell className="text-right font-semibold">{item.total.toFixed(2)} zł</TableCell>
@@ -862,17 +872,21 @@ const OrderEditView = ({ order, onBack, onSave }: { order: Order; onBack: () => 
       <TableCell>
         <div className="space-y-1">
           <span className="font-medium">{item.name}</span>
+          <OrderLineDishContents contents={item.dish?.contents} />
           {(item.subItems?.length ?? 0) > 0 && (
             <Collapsible>
               <CollapsibleTrigger className="group flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground py-0.5">
                 <ChevronRight className="w-3.5 h-3.5 shrink-0 transition-transform group-data-[state=open]:rotate-90" />
                 Szczegóły ({item.subItems!.length})
               </CollapsibleTrigger>
-              <CollapsibleContent className="pl-5 pt-1 space-y-1">
+              <CollapsibleContent className="pl-5 pt-1 space-y-2">
                 {item.subItems!.map((sub, si) => (
-                  <p key={si} className="text-xs text-muted-foreground border-l-2 border-primary/20 pl-2">
-                    {sub.name} — {fmtNum(sub.quantity)} {sub.unit}
-                  </p>
+                  <div key={si} className="space-y-0.5">
+                    <p className="text-xs text-muted-foreground border-l-2 border-primary/20 pl-2">
+                      {sub.name} — {fmtNum(sub.quantity)} {sub.unit}
+                    </p>
+                    <OrderLineDishContents contents={sub.dish?.contents} />
+                  </div>
                 ))}
               </CollapsibleContent>
             </Collapsible>
@@ -1778,10 +1792,16 @@ const AddOrderSheet = ({ open, onClose, onAdd }: { open: boolean; onClose: () =>
                   <div key={i} className="flex items-start gap-2 px-3 py-2 rounded-md bg-muted/30">
                     <div className="flex-1 min-w-0">
                       <span className="text-sm font-medium truncate block">{item.name}</span>
+                      <OrderLineDishContents contents={item.dish?.contents} />
                       {item.subItems && item.subItems.length > 0 && (
-                        <div className="mt-0.5 space-y-0.5">
+                        <div className="mt-0.5 space-y-1">
                           {item.subItems.map((sub, si) => (
-                            <p key={si} className="text-[11px] text-muted-foreground pl-2 border-l-2 border-primary/20">{sub.name}{sub.quantity > 1 ? ` ×${sub.quantity}` : ""}</p>
+                            <div key={si} className="space-y-0.5">
+                              <p className="text-[11px] text-muted-foreground pl-2 border-l-2 border-primary/20">
+                                {sub.name}{sub.quantity > 1 ? ` ×${sub.quantity}` : ""}
+                              </p>
+                              <OrderLineDishContents contents={sub.dish?.contents} />
+                            </div>
                           ))}
                         </div>
                       )}
@@ -1835,6 +1855,32 @@ const AddOrderSheet = ({ open, onClose, onAdd }: { open: boolean; onClose: () =>
   );
 };
 
+
+
+/** Map Prisma `dish` join from admin API to frontend `Dish` (offer PDF uses `contents`). */
+function mapApiDishToOrderDish(raw: unknown): Dish | undefined {
+  if (raw == null || typeof raw !== "object") return undefined;
+  const d = raw as Record<string, unknown>;
+  if (typeof d.id !== "string") return undefined;
+  return {
+    type: typeof d.productType === "string" ? d.productType : "dish",
+    id: d.id,
+    name: String(d.name ?? ""),
+    description: String(d.description ?? ""),
+    longDescription: d.longDescription != null ? String(d.longDescription) : undefined,
+    image: d.imageUrl != null ? String(d.imageUrl) : undefined,
+    contents: Array.isArray(d.contents) ? d.contents.map((c) => String(c)) : [],
+    allergens: Array.isArray(d.allergens) ? d.allergens.map((c) => String(c)) : [],
+    dietaryTags: Array.isArray(d.dietaryTags) ? d.dietaryTags.map((c) => String(c)) : [],
+    pricePerUnit: Number(d.pricePerUnit ?? 0),
+    pricePerUnitOnSite: d.pricePerUnitOnSite != null ? Number(d.pricePerUnitOnSite) : null,
+    unitLabel: String(d.unitLabel ?? "szt."),
+    minQuantity: Number(d.minQuantity ?? 1) || 1,
+    category: String(d.categorySlug ?? ""),
+    bail: Number(d.bail ?? 0),
+  };
+}
+
 // ===== MAIN VIEW =====
 const OrdersView = () => {
   const [orders, setOrders] = useState<Order[]>(mockOrders);
@@ -1861,14 +1907,22 @@ const OrdersView = () => {
 
       const mapped: Order[] = dbOrders.map((o) => {
         const orderItems = o.orderItems ?? [];
-        const items: OrderItem[] = orderItems.map((item) => ({
-          ...item,
-          dishId: (item as { dishId?: string | null }).dishId ?? undefined,
-          subItems: (item.subItems ?? []).map((sub) => ({
-            ...sub,
-            dishId: sub.dishId ?? undefined,
-          })),
-        }));
+        const items: OrderItem[] = orderItems.map((item) => {
+          const { dish: apiDish, subItems: apiSubs, ...itemRest } = item;
+          return {
+            ...itemRest,
+            dishId: item.dishId ?? undefined,
+            dish: mapApiDishToOrderDish(apiDish),
+            subItems: (apiSubs ?? []).map((sub) => {
+              const { dish: apiSubDish, ...subRest } = sub;
+              return {
+                ...subRest,
+                dishId: sub.dishId ?? undefined,
+                dish: mapApiDishToOrderDish(apiSubDish),
+              };
+            }),
+          };
+        });
         return {
           id: String(o.orderNumber ?? ""),
           dbId: String(o.id ?? ""),
