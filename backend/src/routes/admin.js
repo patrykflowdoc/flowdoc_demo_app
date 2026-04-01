@@ -7,6 +7,7 @@ import { z } from "zod";
 import { prisma } from "../config/db.js";
 import { requireAuth } from "../middleware/auth.js";
 import { requireCsrf } from "../middleware/csrf.js";
+import { createOrderFromPayload } from "../services/createOrderFromPayload.js";
 
 const router = Router();
 router.use(requireAuth);
@@ -265,6 +266,27 @@ router.get("/orders/:id", async (req, res) => {
   res.json(order);
 });
 
+/** POST /api/admin/orders */
+router.post("/orders", requireCsrf, async (req, res) => {
+  try {
+    const explicitClientId =
+      typeof req.body?.clientId === "string" && req.body.clientId.trim().length > 0
+        ? req.body.clientId.trim()
+        : null;
+    const created = await createOrderFromPayload(prisma, req.body, {
+      sendEmails: false,
+      explicitClientId,
+    });
+    res.status(201).json(created);
+  } catch (err) {
+    console.error("POST /api/admin/orders error:", err);
+    if (err instanceof Error && err.message.includes("Missing order")) {
+      return res.status(400).json({ error: err.message });
+    }
+    res.status(500).json({ error: "Failed to create order" });
+  }
+});
+
 /** PATCH /api/admin/orders/:id */
 router.patch("/orders/:id", requireCsrf, async (req, res) => {
   const id = req.params.id;
@@ -397,6 +419,7 @@ router.get("/catalog", async (_req, res) => {
         name: v.name,
         price: decimalToNum(v.price),
         sort_order: v.sortOrder,
+        dish_id: v.dishId ?? null,
       })),
     })),
     configurable_sets: sets.map((s) => ({
@@ -415,6 +438,7 @@ router.get("/catalog", async (_req, res) => {
           name: o.name,
           sort_order: o.sortOrder,
           converter: toNum(o.converter) ?? 1,
+          dish_id: o.dishId ?? null,
         })),
       })),
     })),

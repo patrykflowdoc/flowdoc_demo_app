@@ -6,6 +6,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { User, Mail, Phone, MessageSquare, MapPin, Building2, Home, Truck, AlertCircle, CheckCircle2, Loader2, Briefcase } from "lucide-react";
 import { useState, useCallback, useRef } from "react";
 import { calculateDelivery as apiCalculateDelivery } from "@/api/client";
+import type { CateringType } from "@/lib/pricing";
 
 export interface DeliveryConfig {
   companyLat: number | null;
@@ -16,6 +17,7 @@ export interface DeliveryConfig {
 }
 
 type ContactFormProps = {
+  cateringType: CateringType;
   contactName: string;
   contactEmail: string;
   contactPhone: string;
@@ -50,6 +52,7 @@ interface DeliveryResult {
 }
 
 export function ContactForm({
+  cateringType, 
   contactName, contactEmail, contactPhone, contactCity, contactStreet,
   contactBuildingNumber, contactApartmentNumber, notes,
   companyName, companyNip,
@@ -184,90 +187,92 @@ export function ContactForm({
           </div>
 
           {/* Address section */}
+          { cateringType === "wyjazdowy" ? (
           <div className="pt-4 border-t border-border">
-            <div className="flex items-center gap-2 mb-4">
-              <MapPin className="w-4 h-4 text-primary" />
-              <span className="font-medium">Adres dostawy</span>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="city" className="flex items-center gap-2">
-                  <Building2 className="w-4 h-4 text-muted-foreground" />
-                  Miasto *
-                </Label>
-                <Input id="city" placeholder="Kraków" value={contactCity} onChange={(e) => handleCityChange(e.target.value)} className="h-12" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="street" className="flex items-center gap-2">
-                  <Home className="w-4 h-4 text-muted-foreground" />
-                  Ulica *
-                </Label>
-                <Input id="street" placeholder="ul. Przykładowa" value={contactStreet} onChange={(e) => handleStreetChange(e.target.value)} className="h-12" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="buildingNumber">Numer budynku *</Label>
-                <Input id="buildingNumber" placeholder="123" value={contactBuildingNumber} onChange={(e) => handleBuildingChange(e.target.value)} className="h-12" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="apartmentNumber">Numer lokalu (opcjonalne)</Label>
-                <Input id="apartmentNumber" placeholder="4A" value={contactApartmentNumber} onChange={(e) => onApartmentNumberChange(e.target.value)} className="h-12" />
-              </div>
-            </div>
-
-            {/* Delivery cost feedback */}
-            {hasDeliveryConfig && contactCity.trim() && contactStreet.trim() && contactBuildingNumber.trim() && (
-              <div className="mt-4">
-                {calculating ? (
-                  <div className="flex items-center gap-3 p-3 rounded-lg bg-muted border border-border">
-                    <Loader2 className="w-5 h-5 text-primary animate-spin shrink-0" />
-                    <span className="text-sm text-muted-foreground">Obliczam odległość...</span>
-                  </div>
-                ) : deliveryError ? (
-                  <div className="flex items-start gap-3 p-3 rounded-lg bg-muted border border-border">
-                    <AlertCircle className="w-5 h-5 text-muted-foreground mt-0.5 shrink-0" />
-                    <div>
-                      <p className="text-sm font-medium">{deliveryError}</p>
-                      <p className="text-xs text-muted-foreground">Skontaktuj się z nami w sprawie dostawy</p>
-                    </div>
-                  </div>
-                ) : deliveryResult?.tooFar ? (
-                  <div className="flex items-start gap-3 p-3 rounded-lg bg-destructive/5 border border-destructive/20">
-                    <AlertCircle className="w-5 h-5 text-destructive mt-0.5 shrink-0" />
-                    <div>
-                      <p className="text-sm font-medium text-destructive">Poza zasięgiem dostawy</p>
-                      <p className="text-xs text-muted-foreground">
-                        Odległość: {deliveryResult.distanceKm} km (maks. {deliveryConfig.maxDeliveryKm} km). Skontaktuj się telefonicznie.
-                      </p>
-                    </div>
-                  </div>
-                ) : deliveryResult ? (
-                  <div className="flex items-start gap-3 p-3 rounded-lg bg-primary/5 border border-primary/20">
-                    <Truck className="w-5 h-5 text-primary mt-0.5 shrink-0" />
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-sm">
-                          {deliveryResult.distanceKm} km • ~{deliveryResult.durationMin} min
-                        </span>
-                        <CheckCircle2 className="w-4 h-4 text-primary" />
-                      </div>
-                      {deliveryResult.isFree ? (
-                        <p className="text-sm text-primary font-medium">Darmowa dostawa! 🎉</p>
-                      ) : (
-                        <p className="text-sm text-muted-foreground">
-                          Koszt dostawy: <span className="font-semibold text-foreground">{deliveryResult.price} zł</span>
-                          <span className="ml-1 text-xs">({deliveryConfig.pricePerKm} zł/km)</span>
-                          {deliveryConfig.freeDeliveryAbove != null && (
-                            <span className="ml-1 text-xs">(darmowa od {deliveryConfig.freeDeliveryAbove} zł)</span>
-                          )}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            )}
+          <div className="flex items-center gap-2 mb-4">
+            <MapPin className="w-4 h-4 text-primary" />
+            <span className="font-medium">Adres dostawy</span>
           </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="city" className="flex items-center gap-2">
+                <Building2 className="w-4 h-4 text-muted-foreground" />
+                Miasto *
+              </Label>
+              <Input id="city" placeholder="Kraków" value={contactCity} onChange={(e) => handleCityChange(e.target.value)} className="h-12" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="street" className="flex items-center gap-2">
+                <Home className="w-4 h-4 text-muted-foreground" />
+                Ulica *
+              </Label>
+              <Input id="street" placeholder="ul. Przykładowa" value={contactStreet} onChange={(e) => handleStreetChange(e.target.value)} className="h-12" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="buildingNumber">Numer budynku *</Label>
+              <Input id="buildingNumber" placeholder="123" value={contactBuildingNumber} onChange={(e) => handleBuildingChange(e.target.value)} className="h-12" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="apartmentNumber">Numer lokalu (opcjonalne)</Label>
+              <Input id="apartmentNumber" placeholder="4A" value={contactApartmentNumber} onChange={(e) => onApartmentNumberChange(e.target.value)} className="h-12" />
+            </div>
+          </div>
+
+          {/* Delivery cost feedback */}
+          {hasDeliveryConfig && contactCity.trim() && contactStreet.trim() && contactBuildingNumber.trim() && (
+            <div className="mt-4">
+              {calculating ? (
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-muted border border-border">
+                  <Loader2 className="w-5 h-5 text-primary animate-spin shrink-0" />
+                  <span className="text-sm text-muted-foreground">Obliczam odległość...</span>
+                </div>
+              ) : deliveryError ? (
+                <div className="flex items-start gap-3 p-3 rounded-lg bg-muted border border-border">
+                  <AlertCircle className="w-5 h-5 text-muted-foreground mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium">{deliveryError}</p>
+                    <p className="text-xs text-muted-foreground">Skontaktuj się z nami w sprawie dostawy</p>
+                  </div>
+                </div>
+              ) : deliveryResult?.tooFar ? (
+                <div className="flex items-start gap-3 p-3 rounded-lg bg-destructive/5 border border-destructive/20">
+                  <AlertCircle className="w-5 h-5 text-destructive mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-destructive">Poza zasięgiem dostawy</p>
+                    <p className="text-xs text-muted-foreground">
+                      Odległość: {deliveryResult.distanceKm} km (maks. {deliveryConfig.maxDeliveryKm} km). Skontaktuj się telefonicznie.
+                    </p>
+                  </div>
+                </div>
+              ) : deliveryResult ? (
+                <div className="flex items-start gap-3 p-3 rounded-lg bg-primary/5 border border-primary/20">
+                  <Truck className="w-5 h-5 text-primary mt-0.5 shrink-0" />
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-sm">
+                        {deliveryResult.distanceKm} km • ~{deliveryResult.durationMin} min
+                      </span>
+                      <CheckCircle2 className="w-4 h-4 text-primary" />
+                    </div>
+                    {deliveryResult.isFree ? (
+                      <p className="text-sm text-primary font-medium">Darmowa dostawa! 🎉</p>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        Koszt dostawy: <span className="font-semibold text-foreground">{deliveryResult.price} zł</span>
+                        <span className="ml-1 text-xs">({deliveryConfig.pricePerKm} zł/km)</span>
+                        {deliveryConfig.freeDeliveryAbove != null && (
+                          <span className="ml-1 text-xs">(darmowa od {deliveryConfig.freeDeliveryAbove} zł)</span>
+                        )}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          )}
+        </div>) : null }
+          
 
           {/* Company section */}
           <div className="pt-4 border-t border-border">

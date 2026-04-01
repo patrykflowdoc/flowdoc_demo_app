@@ -184,6 +184,7 @@ export interface SubmitOrderPayload {
     deliveryZoneId?: string | null;
     deliveryPrice?: number;
     paymentMethod?: string;
+    deposit?: number;
     bail?: number;
     notes?: string;
   };
@@ -281,9 +282,15 @@ export async function deleteAdminOrder(id: string): Promise<void> {
   return request(`/api/admin/orders/${id}`, { method: "DELETE" });
 }
 
+export async function createAdminOrder(
+  payload: SubmitOrderPayload & { clientId?: string | null }
+): Promise<{ orderId: string; orderNumber: string }> {
+  return request("/api/admin/orders", { method: "POST", body: payload });
+}
+
 export async function getAdminCatalog(): Promise<{
   dishes: Array<{ id: string; name: string; unit_label: string; price_per_unit: number; price_brutto: number }>;
-  bundles: Array<{ id: string; name: string; base_price: number; converter?: number; bundle_variants: Array<{ id: string; name: string; price: number; sort_order: number }> }>;
+  bundles: Array<{ id: string; name: string; base_price: number; converter?: number; bundle_variants: Array<{ id: string; name: string; price: number; sort_order: number; dish_id?: string | null }> }>;
   configurable_sets: Array<{
     id: string;
     name: string;
@@ -295,7 +302,7 @@ export async function getAdminCatalog(): Promise<{
       max_selections: number;
       sort_order: number;
       converter?: number;
-      config_group_options: Array<{ id: string; name: string; sort_order: number; converter?: number }>;
+      config_group_options: Array<{ id: string; name: string; sort_order: number; converter?: number; dish_id?: string | null }>;
     }>;
   }>;
   extras: Array<{ id: string; name: string; price: number; unit_label: string; category: string }>;
@@ -319,7 +326,7 @@ export async function deleteProductCategory(id: string): Promise<void> {
   return request(`/api/admin/product-categories/${id}`, { method: "DELETE" });
 }
 
-export async function getAdminEventTypes(): Promise<unknown[]> {
+export async function getAdminEventTypes(): Promise<EventType[]> {
   return request("/api/admin/event-types");
 }
 

@@ -1,6 +1,6 @@
 import type { PdfOrderDocumentData } from "@/types/orders";
 
-export type SummaryDocType = "zamowienia" | "lista-dan" | "food-cost";
+export type SummaryDocType = "zamowienia" | "lista-dan" | "food-cost" | "full";
 
 export function parseDateForGrouping(dateStr: string): string {
   const dayNames = ["niedziela", "poniedziałek", "wtorek", "środa", "czwartek", "piątek", "sobota"];

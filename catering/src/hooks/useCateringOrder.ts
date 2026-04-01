@@ -248,7 +248,16 @@ export function useCateringOrder(
   }, []);
 
   const updateOrder = useCallback((updates: Partial<CateringOrder>) => {
-    setOrder((prev) => ({ ...prev, ...updates }));
+    setOrder((prev) => {
+      // No-op guard: avoid rerenders when incoming values are identical.
+      for (const key in updates) {
+        const typedKey = key as keyof CateringOrder;
+        if (prev[typedKey] !== updates[typedKey]) {
+          return { ...prev, ...updates };
+        }
+      }
+      return prev;
+    });
   }, []);
 
   const nextStep = useCallback(() => {

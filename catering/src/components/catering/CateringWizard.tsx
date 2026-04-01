@@ -183,6 +183,10 @@ export function CateringWizard() {
     );
   };
 
+  const handleBailChange = useCallback((bail: number) => {
+    updateOrder({ bail });
+  }, [updateOrder]);
+
   const getValidationErrors = useCallback((): string[] => {
     const errors: string[] = [];
     if (currentStep === 0) {
@@ -218,9 +222,11 @@ export function CateringWizard() {
       if (!order.contactName) errors.push("Podaj imię i nazwisko");
       if (!order.contactEmail) errors.push("Podaj adres e-mail");
       if (!order.contactPhone) errors.push("Podaj numer telefonu");
-      if (!order.contactCity) errors.push("Podaj miasto");
-      if (!order.contactStreet) errors.push("Podaj ulicę");
-      if (!order.contactBuildingNumber) errors.push("Podaj numer budynku");
+      if (order.cateringType === "wyjazdowy") {
+        if (!order.contactCity) errors.push("Podaj miasto");
+        if (!order.contactStreet) errors.push("Podaj ulicę");
+        if (!order.contactBuildingNumber) errors.push("Podaj numer budynku");
+      }
     }
     return errors;
   }, [
@@ -323,6 +329,7 @@ export function CateringWizard() {
       case 3:
         return (
           <ContactForm
+            cateringType={order.cateringType}
             contactName={order.contactName}
             contactEmail={order.contactEmail}
             contactPhone={order.contactPhone}
@@ -359,7 +366,7 @@ export function CateringWizard() {
             onSimpleQuantityChange={updateSimpleQuantity}
             onExpandableVariantChange={updateExpandableVariant}
             onConfigurableChange={updateConfigurable}
-            onBailChange={(bail) => updateOrder({ bail: bail })}
+            onBailChange={handleBailChange}
             products={products}
             categories={categories}
             eventTypes={eventTypes}

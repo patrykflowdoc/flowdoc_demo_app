@@ -100,7 +100,6 @@ export function OrderSummary({
       }
     }
   }
-
   for (const [productId, data] of Object.entries(order.configurableData)) {
     if (data.quantity > 0) {
       const product = products.find(p => p.id === productId);
@@ -125,7 +124,7 @@ export function OrderSummary({
   }
   }
 
-  console.log("productLines", productLines);
+
 
   // Sort by serving time (earliest first), items without time go last
   productLines.sort((a, b) => {
