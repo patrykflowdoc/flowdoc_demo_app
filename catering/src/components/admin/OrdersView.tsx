@@ -32,7 +32,7 @@ import type {
   OrderItem,
 } from "@/types/orders";
 import { ProductTable, OrderLineDishContents } from "./ProductTable";
-import { ADMIN_EVENT_TYPES, SubItemSelector, type CatalogProduct, useCatalogProducts } from "./OrderCatalogPicker";
+import { useAdminEventTypes, SubItemSelector, type CatalogProduct, useCatalogProducts } from "./OrderCatalogPicker";
 import { AddOrderSheet } from "./AddOrderSheet";
 import { mapAdminApiOrderToOrder } from "@/lib/adminOrderViewMap";
 
@@ -1105,7 +1105,7 @@ const InlineEventSelect = ({ value, onChange }: { value: string; onChange: (v: s
       </SelectTrigger>
       <SelectContent>
         <SelectItem value="__none__">— Brak —</SelectItem>
-        {ADMIN_EVENT_TYPES.map((e) => (
+        {useAdminEventTypes().map((e) => (
           <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
         ))}
       </SelectContent>

@@ -31,7 +31,7 @@ import {
 } from "lucide-react";
 import type { DbClient, Order, OrderItem } from "@/types/orders";
 import { OrderLineDishContents } from "./ProductTable";
-import { ADMIN_EVENT_TYPES, SubItemSelector, type CatalogProduct, useCatalogProducts } from "./OrderCatalogPicker";
+import { useAdminEventTypes, SubItemSelector, type CatalogProduct, useCatalogProducts } from "./OrderCatalogPicker";
 import { mapAdminApiOrderToOrder } from "@/lib/adminOrderViewMap";
 
 const fmtNum = (n: number) => n.toLocaleString("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -488,7 +488,7 @@ export const AddOrderSheet = ({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">— Brak —</SelectItem>
-                  {ADMIN_EVENT_TYPES.map((e) => (
+                  {useAdminEventTypes().map((e) => (
                     <SelectItem key={e.id} value={e.id}>
                       {e.name}
                     </SelectItem>

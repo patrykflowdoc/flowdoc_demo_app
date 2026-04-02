@@ -408,6 +408,7 @@ model Order {
   clientPhone      String?
   eventType        String?
   eventDate        DateTime? @db.Date
+  eventTime        DateTime? @db.Time
   guestCount       Int?
   deliveryAddress  String?
   contactCity       String?
@@ -501,6 +502,7 @@ model BlockedDate {
   id          String   @id @default(uuid())
   blockedDate DateTime @db.Date
   reason      String?
+  blockedTime DateTime? @db.Time
   createdAt   DateTime @default(now())
 
   @@map("blocked_dates")

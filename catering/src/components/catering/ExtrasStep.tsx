@@ -194,22 +194,7 @@ export function ExtrasStep({
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
           {/* Waiter "no service" option if this category has waiter items */}
           {currentWaiter.length > 0 && (
-            <Card onClick={() => onWaiterServiceChange(null, 0)} className={cn("cursor-pointer transition-all duration-200 hover:shadow-md active:scale-[0.99] overflow-hidden", !selectedWaiterService && "ring-2 ring-primary")}>
-              <CardContent className="p-3">
-                <div className="flex items-center gap-3">
-                  <div className={cn("w-16 h-16 rounded-lg flex items-center justify-center shrink-0", !selectedWaiterService ? "bg-primary/10" : "bg-muted")}>
-                    <X className="w-6 h-6 text-muted-foreground" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-foreground text-sm">Bez obsługi</h3>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-sm font-bold text-primary">W cenie</span>
-                    </div>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
-                </div>
-              </CardContent>
-            </Card>
+            null /* TODO: Add waiter "no service" option */
           )}
 
           {/* Regular extras */}

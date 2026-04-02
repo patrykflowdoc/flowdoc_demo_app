@@ -6,11 +6,11 @@ import { cn } from "@/lib/utils";
 import { Check } from "lucide-react";
 import type { OrderItem, OrderSubItem } from "@/types/orders";
 import { getAdminEventTypes } from "@/api/client";
+import type { EventType } from "@/data/products";
 
 const fmtNum = (n: number) =>
   n.toLocaleString("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export const ADMIN_EVENT_TYPES = await getAdminEventTypes();
 
 export type CatalogProduct = {
   id: string;
@@ -108,6 +108,17 @@ export function useCatalogProducts() {
   }, []);
   return catalog;
 }
+
+
+export const useAdminEventTypes = () => {
+  const [eventTypes, setEventTypes] = useState<EventType[]>([]);
+  useEffect(() => {
+    getAdminEventTypes().then((data) => {
+      setEventTypes(data);
+    });
+  }, []);
+  return eventTypes;
+};
 
 export const SubItemSelector = ({
   product,
