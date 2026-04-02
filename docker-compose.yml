@@ -7,7 +7,7 @@ services:
       dockerfile: Dockerfile
       target: builder
     environment:
-      - DATABASE_URL=postgresql://postgres:test@postgres:5432/szczypta-smaku?schema=public
+      - DATABASE_URL=${DATABASE_URL}
     command: npx prisma db seed
     depends_on:
       - postgres
@@ -19,9 +19,9 @@ services:
     image: postgres:17-alpine
     restart: unless-stopped
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=test
-      - POSTGRES_DB=szczypta-smaku
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
       - LANG=C.UTF-8
       - LC_ALL=C.UTF-8
     ports:
@@ -38,7 +38,7 @@ services:
     ports:
       - "25044:25044"
     environment:
-      - DATABASE_URL=postgresql://postgres:test@postgres:5432/szczypta-smaku?schema=public
+      - DATABASE_URL=${DATABASE_URL}
     volumes:
       - ./backend:/app
       - /app/node_modules  # zachowaj node_modules z obrazu (zawiera dotenv itd.)

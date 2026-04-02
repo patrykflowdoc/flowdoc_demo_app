@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef, type PointerEvent as ReactPointerEvent } from "react";
 import * as api from "@/api/client";
 import { Search, Eye, Pencil, Trash2, ChevronDown, ArrowLeft, FileText, X, Check, Calculator, FileDown, CookingPot, ClipboardList, Plus, Download, ChevronRight, CalendarDays } from "lucide-react";
 import { generateOfferPdf, generateFoodCostPdf, generateKitchenPdf, generateSummaryPdf, type SummaryDocType } from "@/lib/generatePdf";
@@ -35,6 +35,7 @@ import { ProductTable, OrderLineDishContents } from "./ProductTable";
 import { useAdminEventTypes, SubItemSelector, type CatalogProduct, useCatalogProducts } from "./OrderCatalogPicker";
 import { AddOrderSheet } from "./AddOrderSheet";
 import { mapAdminApiOrderToOrder } from "@/lib/adminOrderViewMap";
+import type { CateringType } from "@/lib/pricing";
 
 
 const statusColors: Record<OrderStatus, string> = {
@@ -60,6 +61,28 @@ const docLabels: Record<OrderDocumentType, { label: string; Icon: LucideIcon }> 
 };
 
 const fmtNum = (n: number) => n.toLocaleString("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+const CATERING_TYPE_LABELS: Record<CateringType, string> = {
+  wyjazdowy: "Catering wyjazdowy",
+  na_sali: "Na sali",
+  odbior_osobisty: "Odbiór osobisty",
+};
+
+export function formatCateringTypeLabel(ct: CateringType | null): string {
+  if (!ct) return "—";
+  return CATERING_TYPE_LABELS[ct] ?? "—";
+}
+
+/** Przyklejona kolumna Akcje — bez box-shadow (mniej repaintów przy scrollu). */
+const ordersListStickyActionHeadClass =
+  "sticky right-0 z-[6] bg-card border-l border-border/80";
+const ordersListStickyActionCellClass =
+  "sticky right-0 z-[5] bg-card border-l border-border/80 group-hover/ordRow:bg-muted/50";
+
+const ordersListScrollbarHidden =
+  "[scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:h-0";
+const ordersListScrollbarVisible =
+  "[scrollbar-width:thin] [scrollbar-color:hsl(var(--foreground)/0.35)_hsl(var(--muted))] [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-foreground/35 [&::-webkit-scrollbar-track]:bg-muted/80";
 
 // ===== ORDER DOCUMENT VIEW =====
 const OrderDocumentView = ({ order, docType, onBack }: { order: Order; docType: OrderDocumentType; onBack: () => void }) => {
@@ -163,7 +186,7 @@ const OrderDocumentView = ({ order, docType, onBack }: { order: Order; docType: 
         <Card className="mb-6">
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2"><FileText className="w-5 h-5 text-primary" /> Oferta</CardTitle>
-            <CardDescription>{order.client} · {order.event || "Wydarzenie"} · {order.date}</CardDescription>
+            <CardDescription>{order.client} · {order.event || "Wydarzenie"} · {order.date} · {order.time}</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="text-sm space-y-1 mb-4">
@@ -376,6 +399,13 @@ const OrderDocumentView = ({ order, docType, onBack }: { order: Order; docType: 
   );
 };
 
+function orderContactStreetLine(o: Order): string {
+  const parts = [o.contactStreet, o.contactBuilding, o.contactApartment].filter(
+    (x): x is string => typeof x === "string" && x.trim().length > 0
+  );
+  return parts.join(" ").trim();
+}
+
 // ===== ORDER DETAIL VIEW =====
 const OrderDetailView = ({ order, onBack, onEdit, onGenerateDoc, onLinkClient }: { order: Order; onBack: () => void; onEdit: () => void; onGenerateDoc: (type: OrderDocumentType) => void; onLinkClient: (orderId: string, clientId: string) => void }) => {
   const [showClientSearch, setShowClientSearch] = useState(false);
@@ -386,6 +416,32 @@ const OrderDetailView = ({ order, onBack, onEdit, onGenerateDoc, onLinkClient }:
   const [newLastName, setNewLastName] = useState(order.client.split(" ").slice(1).join(" ") || "");
   const [newEmail, setNewEmail] = useState(order.email);
   const [newPhone, setNewPhone] = useState(order.phone);
+  const [newCompanyName, setNewCompanyName] = useState(order.companyName?.trim() ?? "");
+  const [newNip, setNewNip] = useState(order.companyNip?.trim() ?? "");
+  const [newAddressLine, setNewAddressLine] = useState(orderContactStreetLine(order));
+  const [newCity, setNewCity] = useState(order.contactCity?.trim() ?? "");
+
+  useEffect(() => {
+    setNewFirstName(order.client.split(" ")[0] || "");
+    setNewLastName(order.client.split(" ").slice(1).join(" ") || "");
+    setNewEmail(order.email);
+    setNewPhone(order.phone);
+    setNewCompanyName(order.companyName?.trim() ?? "");
+    setNewNip(order.companyNip?.trim() ?? "");
+    setNewAddressLine(orderContactStreetLine(order));
+    setNewCity(order.contactCity?.trim() ?? "");
+  }, [
+    order.dbId,
+    order.client,
+    order.email,
+    order.phone,
+    order.companyName,
+    order.companyNip,
+    order.contactCity,
+    order.contactStreet,
+    order.contactBuilding,
+    order.contactApartment,
+  ]);
 
   useEffect(() => {
     api.getAdminClients().then((data) => {
@@ -398,6 +454,7 @@ const OrderDetailView = ({ order, onBack, onEdit, onGenerateDoc, onLinkClient }:
         address: c.address != null ? String(c.address) : null,
         city: c.city != null ? String(c.city) : null,
         companyName: c.companyName != null ? String(c.companyName) : null,
+        nip: c.nip != null ? String(c.nip) : null,
       })));
     }).catch(() => {});
   }, []);
@@ -414,6 +471,10 @@ const OrderDetailView = ({ order, onBack, onEdit, onGenerateDoc, onLinkClient }:
         lastName: newLastName,
         email: newEmail,
         phone: newPhone,
+        address: newAddressLine.trim() || null,
+        city: newCity.trim() || null,
+        companyName: newCompanyName.trim() || null,
+        nip: newNip.trim() || null,
       }) as Record<string, unknown>;
       onLinkClient(order.dbId, String(data.id));
       setShowCreateClient(false);
@@ -434,7 +495,6 @@ const OrderDetailView = ({ order, onBack, onEdit, onGenerateDoc, onLinkClient }:
         </Button>
         <div className="flex-1">
           <h1 className="text-2xl font-bold text-foreground">{order.id}</h1>
-          <p className="text-muted-foreground text-sm">Utworzono: {order.createdAt}</p>
         </div>
         <Badge className={cn("text-xs border", statusColors[order.status])}>{order.status}</Badge>
         <DropdownMenu>
@@ -480,6 +540,16 @@ const OrderDetailView = ({ order, onBack, onEdit, onGenerateDoc, onLinkClient }:
             <div><span className="text-muted-foreground">Imię i nazwisko:</span> <span className="font-medium">{linkedClient ? `${linkedClient.firstName} ${linkedClient.lastName}` : order.client}</span></div>
             <div><span className="text-muted-foreground">Email:</span> <span className="font-medium">{linkedClient?.email || order.email}</span></div>
             <div><span className="text-muted-foreground">Telefon:</span> <span className="font-medium">{linkedClient?.phone || order.phone}</span></div>
+            {(order.companyName || order.companyNip) && (
+              <>
+                {order.companyName ? (
+                  <div><span className="text-muted-foreground">Firma:</span> <span className="font-medium">{order.companyName}</span></div>
+                ) : null}
+                {order.companyNip ? (
+                  <div><span className="text-muted-foreground">NIP:</span> <span className="font-medium">{order.companyNip}</span></div>
+                ) : null}
+              </>
+            )}
             {!order.clientId && (
               <div className="pt-2 border-t border-border space-y-2">
                 {!showClientSearch && !showCreateClient && (
@@ -521,6 +591,10 @@ const OrderDetailView = ({ order, onBack, onEdit, onGenerateDoc, onLinkClient }:
                     </div>
                     <Input placeholder="Email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} className="h-8 text-xs" />
                     <Input placeholder="Telefon" value={newPhone} onChange={(e) => setNewPhone(e.target.value)} className="h-8 text-xs" />
+                    <Input placeholder="Firma (opcjonalnie)" value={newCompanyName} onChange={(e) => setNewCompanyName(e.target.value)} className="h-8 text-xs" />
+                    <Input placeholder="NIP (opcjonalnie)" value={newNip} onChange={(e) => setNewNip(e.target.value)} className="h-8 text-xs" />
+                    <Input placeholder="Ulica i numer (opcjonalnie)" value={newAddressLine} onChange={(e) => setNewAddressLine(e.target.value)} className="h-8 text-xs" />
+                    <Input placeholder="Miasto (opcjonalnie)" value={newCity} onChange={(e) => setNewCity(e.target.value)} className="h-8 text-xs" />
                     <div className="flex gap-2">
                       <Button size="sm" className="text-xs" onClick={handleCreateClient}>Utwórz i przypisz</Button>
                       <Button variant="ghost" size="sm" className="text-xs" onClick={() => setShowCreateClient(false)}>Anuluj</Button>
@@ -536,6 +610,7 @@ const OrderDetailView = ({ order, onBack, onEdit, onGenerateDoc, onLinkClient }:
           <CardContent className="space-y-2 text-sm">
             <div><span className="text-muted-foreground">Typ:</span> <span className="font-medium">{order.event || "Nie podano"}</span></div>
             <div><span className="text-muted-foreground">Data:</span> <span className="font-medium">{order.date}</span></div>
+            <div><span className="text-muted-foreground">Godzina:</span> <span className="font-medium">{order.time}</span></div>
             <div><span className="text-muted-foreground">Adres dostawy:</span> <span className="font-medium">{order.deliveryAddress}</span></div>
           </CardContent>
         </Card>
@@ -545,7 +620,9 @@ const OrderDetailView = ({ order, onBack, onEdit, onGenerateDoc, onLinkClient }:
             <div><span className="text-muted-foreground">Pozycji:</span> <span className="font-medium">{order.items.length}</span></div>
             {order.guestCount > 0 && <div><span className="text-muted-foreground">Gości:</span> <span className="font-medium">{order.guestCount}</span></div>}
             {order.deliveryCost > 0 && <div><span className="text-muted-foreground">Dostawa:</span> <span className="font-medium">{fmtNum(order.deliveryCost)} zł</span></div>}
-            <div><span className="text-muted-foreground">Kwota:</span> <span className="font-semibold text-primary text-lg">{order.amount}</span></div>
+            {order.discount > 0 && <div><span className="text-muted-foreground">Rabat:</span> <span className="font-medium">- {fmtNum(order.discount)} zł</span></div>}
+            {order.deposit > 0 && <div><span className="text-muted-foreground">Zaliczka:</span> <span className="font-medium">{fmtNum(order.deposit)} zł | {order.status === "Potwierdzone" ? <span className="text-green-500">zapłacona</span> : <span className="text-red-500">niezapłacona</span>}</span></div>}
+            <div><span className="text-muted-foreground">Kwota:</span> <span className="font-medium">{order.amount}</span></div>
             {order.notes && (
               <div className="pt-2 border-t border-border">
                 <span className="text-muted-foreground">Uwagi:</span>
@@ -1100,7 +1177,7 @@ const InlineStatusSelect = ({ value, onChange }: { value: OrderStatus; onChange:
 const InlineEventSelect = ({ value, onChange }: { value: string; onChange: (v: string) => void }) => (
   <div onClick={(e) => e.stopPropagation()}>
     <Select value={value || "__none__"} onValueChange={(v) => onChange(v === "__none__" ? "" : v)}>
-      <SelectTrigger className="h-7 text-xs w-[140px] border-transparent bg-transparent hover:border-border focus:border-border transition-colors text-muted-foreground">
+      <SelectTrigger className="h-7 text-xs w-[100px] border-transparent bg-transparent hover:border-border focus:border-border transition-colors text-muted-foreground">
         <SelectValue placeholder="—" />
       </SelectTrigger>
       <SelectContent>
@@ -1149,6 +1226,19 @@ const InlineAmountInput = ({ value, onChange }: { value: number; onChange: (v: n
   );
 };
 
+
+export const formatOrderDate = (dateStr: string | null) => {
+  if (!dateStr) return "—";
+  const d = new Date(dateStr);
+  const months = ["sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paź", "lis", "gru"];
+  return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+};
+export const formatOrderTime = (timeStr: string | null) => {
+  if (!timeStr) return "—";
+  const t = new Date(timeStr).getUTCHours().toString().padStart(2, "0") + ":" + new Date(timeStr).getUTCMinutes().toString().padStart(2, "0");
+  return t;
+};
+
 // ===== MAIN VIEW =====
 const OrdersView = () => {
   const [orders, setOrders] = useState<Order[]>(mockOrders);
@@ -1160,18 +1250,120 @@ const OrdersView = () => {
   const [showAddOrder, setShowAddOrder] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
 
-  const formatOrderDate = (dateStr: string | null) => {
-    if (!dateStr) return "—";
-    const d = new Date(dateStr);
-    const months = ["sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paź", "lis", "gru"];
-    return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+  const ordersListScrollRef = useRef<HTMLDivElement>(null);
+  const ordersListDragRef = useRef({ active: false, moved: false, startX: 0, startScrollLeft: 0 });
+  const suppressOrdersListRowClickRef = useRef(false);
+  const ordersListPointerXRef = useRef(0);
+  const ordersListScrollRafRef = useRef(0);
+  /** Bez setPointerCapture — przechwytuje zdarzenia i psuje Radix Select w portalu. */
+  const ordersListWinDragCleanupRef = useRef<(() => void) | null>(null);
+  const [ordersListShowHScrollbar, setOrdersListShowHScrollbar] = useState(false);
+  const [ordersListDragScrolling, setOrdersListDragScrolling] = useState(false);
+
+  const clearOrdersListWinDragListeners = useCallback(() => {
+    const off = ordersListWinDragCleanupRef.current;
+    if (off) {
+      ordersListWinDragCleanupRef.current = null;
+      off();
+    }
+  }, []);
+
+  const applyOrdersListDragScroll = useCallback(() => {
+    ordersListScrollRafRef.current = 0;
+    const d = ordersListDragRef.current;
+    const el = ordersListScrollRef.current;
+    if (!d.active || !el) return;
+    const x = ordersListPointerXRef.current;
+    const dx = x - d.startX;
+    if (!d.moved) {
+      if (Math.abs(dx) <= 5) return;
+      d.moved = true;
+      setOrdersListDragScrolling(true);
+      setOrdersListShowHScrollbar(true);
+    }
+    el.scrollLeft = d.startScrollLeft - dx;
+  }, []);
+
+  const endOrdersListDrag = useCallback(
+    (didMove: boolean) => {
+      clearOrdersListWinDragListeners();
+      if (ordersListScrollRafRef.current) {
+        cancelAnimationFrame(ordersListScrollRafRef.current);
+        ordersListScrollRafRef.current = 0;
+      }
+      const wrap = ordersListScrollRef.current;
+      if (wrap) wrap.style.userSelect = "";
+      const d = ordersListDragRef.current;
+      d.active = false;
+      d.moved = false;
+      setOrdersListDragScrolling(false);
+      window.setTimeout(() => setOrdersListShowHScrollbar(false), didMove ? 700 : 250);
+    },
+    [clearOrdersListWinDragListeners]
+  );
+
+  useEffect(
+    () => () => {
+      clearOrdersListWinDragListeners();
+      if (ordersListScrollRafRef.current) cancelAnimationFrame(ordersListScrollRafRef.current);
+    },
+    [clearOrdersListWinDragListeners]
+  );
+
+  const onOrdersListPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (e.pointerType !== "mouse" || e.button !== 0) return;
+    const t = e.target as HTMLElement;
+    if (
+      t.closest(
+        "button, a, input, textarea, select, [role='combobox'], [role='listbox'], [role='option'], [data-radix-select-viewport], [data-radix-popper-content-wrapper], [data-slot='select-trigger']"
+      )
+    ) {
+      return;
+    }
+    const el = ordersListScrollRef.current;
+    if (!el) return;
+    clearOrdersListWinDragListeners();
+    ordersListDragRef.current = {
+      active: true,
+      moved: false,
+      startX: e.clientX,
+      startScrollLeft: el.scrollLeft,
+    };
+    ordersListPointerXRef.current = e.clientX;
+    el.style.userSelect = "none";
+
+    const pid = e.pointerId;
+    const onWinMove = (ev: PointerEvent) => {
+      if (ev.pointerId !== pid || !ordersListDragRef.current.active) return;
+      ordersListPointerXRef.current = ev.clientX;
+      if (!ordersListScrollRafRef.current) {
+        ordersListScrollRafRef.current = requestAnimationFrame(applyOrdersListDragScroll);
+      }
+      if (ordersListDragRef.current.moved && ev.cancelable) ev.preventDefault();
+    };
+    const onWinUp = (ev: PointerEvent) => {
+      if (ev.pointerId !== pid) return;
+      if (!ordersListDragRef.current.active) return;
+      const didMove = ordersListDragRef.current.moved;
+      if (didMove) suppressOrdersListRowClickRef.current = true;
+      endOrdersListDrag(didMove);
+    };
+
+    ordersListWinDragCleanupRef.current = () => {
+      window.removeEventListener("pointermove", onWinMove);
+      window.removeEventListener("pointerup", onWinUp);
+      window.removeEventListener("pointercancel", onWinUp);
+    };
+    window.addEventListener("pointermove", onWinMove, { passive: false });
+    window.addEventListener("pointerup", onWinUp);
+    window.addEventListener("pointercancel", onWinUp);
   };
 
   const fetchOrders = useCallback(async () => {
     try {
       const dbOrders = await api.getAdminOrders();
       if (!dbOrders || dbOrders.length === 0) return;
-      const mapped: Order[] = dbOrders.map((o) => mapAdminApiOrderToOrder(o, formatOrderDate, fmtNum));
+      const mapped: Order[] = dbOrders.map((o) => mapAdminApiOrderToOrder(o, formatOrderDate, formatOrderTime, fmtNum));
 
       setOrders(mapped);
     } catch (err) {
@@ -1186,6 +1378,9 @@ const OrdersView = () => {
   }, [fetchOrders]);
   const filtered = orders.filter((o) => {
     const q = search.toLowerCase().trim();
+    const cateringLabel = formatCateringTypeLabel(o.cateringType).toLowerCase();
+    const submittedUtc = o.createdAt;
+    const submittedRaw = (o.createdAt ?? "").toLowerCase();
     const matchSearch = !q ||
       o.id.toLowerCase().includes(q) ||
       o.client.toLowerCase().includes(q) ||
@@ -1197,6 +1392,10 @@ const OrdersView = () => {
       o.amount.toLowerCase().includes(q) ||
       o.deliveryAddress.toLowerCase().includes(q) ||
       o.notes.toLowerCase().includes(q) ||
+      cateringLabel.includes(q) ||
+      (o.cateringType != null && o.cateringType.toLowerCase().includes(q)) ||
+      submittedUtc.includes(q) ||
+      submittedRaw.includes(q) ||
       o.items.some(item => item.name.toLowerCase().includes(q));
     const matchStatus = statusFilter === "all" || o.status === statusFilter;
     return matchSearch && matchStatus;
@@ -1295,7 +1494,6 @@ const OrdersView = () => {
     return <OrderEditView order={selectedOrder} onBack={() => setView("detail")} onSave={handleSaveOrder} />;
   }
 
-
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -1331,65 +1529,99 @@ const OrdersView = () => {
         </Select>
       </div>
 
-      <div className="bg-card rounded-lg border border-border">
-        <Table>
-          <TableHeader>
-            <TableRow className="hover:bg-transparent">
-              <TableHead className="font-semibold text-foreground">Nr zamówienia</TableHead>
-              <TableHead className="font-semibold text-foreground">Klient</TableHead>
-              <TableHead className="font-semibold text-foreground">Wydarzenie</TableHead>
-              <TableHead className="font-semibold text-foreground">Data</TableHead>
-              <TableHead className="font-semibold text-foreground">Kwota</TableHead>
-              <TableHead className="font-semibold text-foreground">Status</TableHead>
-              <TableHead className="font-semibold text-foreground text-right">Akcje</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filtered.map((order) => (
-              <TableRow key={order.id} className="cursor-pointer" onClick={() => openDetail(order)}>
-                <TableCell className="font-mono text-sm text-muted-foreground">{order.id}</TableCell>
-                <TableCell>
-                  <div>
-                    <div className="font-medium text-foreground">{order.client}</div>
-                    <div className="text-xs text-muted-foreground">{order.email}</div>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <InlineEventSelect
-                    value={order.event}
-                    onChange={(v) => updateOrderField(order.id, { event: v })}
-                  />
-                </TableCell>
-                <TableCell className="text-muted-foreground">{order.date}</TableCell>
-                <TableCell>
-                  <InlineAmountInput
-                    value={order.amountNum}
-                    onChange={(v) => updateOrderField(order.id, { amountNum: v, amount: fmtNum(v) + " zł" })}
-                  />
-                </TableCell>
-                <TableCell>
-                  <InlineStatusSelect
-                    value={order.status}
-                    onChange={(v) => updateOrderField(order.id, { status: v })}
-                  />
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-                    <button onClick={() => openDetail(order)} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
-                      <Eye className="w-4 h-4" />
-                    </button>
-                    <button onClick={() => openEdit(order)} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
-                      <Pencil className="w-4 h-4" />
-                    </button>
-                    <button onClick={() => handleDeleteOrder(order.dbId)} className="p-1.5 rounded-md text-destructive/60 hover:text-destructive hover:bg-destructive/10 transition-colors">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </TableCell>
+      <div className="bg-card rounded-lg border border-border overflow-hidden">
+        <div
+          ref={ordersListScrollRef}
+          role="region"
+          aria-label="Lista zamówień — przewijanie w poziomie przeciągnięciem"
+          title="Przeciągnij w poziomie, aby przewinąć tabelę"
+          onPointerDown={onOrdersListPointerDown}
+          className={cn(
+            "relative w-full overflow-x-auto overflow-y-hidden",
+            ordersListDragScrolling && "cursor-grabbing select-none",
+            !ordersListDragScrolling && "cursor-grab",
+            ordersListShowHScrollbar ? ordersListScrollbarVisible : ordersListScrollbarHidden
+          )}
+        >
+          <table className="w-full min-w-[1320px] caption-bottom text-sm">
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="font-semibold text-foreground">Nr zamówienia</TableHead>
+                <TableHead className="font-semibold text-foreground">Typ kateringu</TableHead>
+                <TableHead className="font-semibold text-foreground">Klient</TableHead>
+                <TableHead className="font-semibold text-foreground whitespace-nowrap">Data wpłynięcia</TableHead>
+                <TableHead className="font-semibold text-foreground">Wydarzenie</TableHead>
+                <TableHead className="font-semibold text-foreground whitespace-nowrap">Data</TableHead>
+                <TableHead className="font-semibold text-foreground text-center">Kwota</TableHead>
+                <TableHead className="font-semibold text-foreground">Status</TableHead>
+                <TableHead className={cn("font-semibold text-foreground text-center", ordersListStickyActionHeadClass)}>
+                  Akcje
+                </TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {filtered.map((order) => (
+                <TableRow
+                  key={order.id}
+                  className="group/ordRow cursor-pointer"
+                  onClick={() => {
+                    if (suppressOrdersListRowClickRef.current) {
+                      suppressOrdersListRowClickRef.current = false;
+                      return;
+                    }
+                    openDetail(order);
+                  }}
+                >
+                  <TableCell className="font-mono text-sm text-muted-foreground">{order.id}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {formatCateringTypeLabel(order.cateringType)}
+                  </TableCell>
+                  <TableCell>
+                    <div>
+                      <div className="font-medium text-foreground">{order.client}</div>
+                      <div className="text-xs text-muted-foreground">{order.email}</div>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                    {order.createdAt}
+                  </TableCell>
+                  <TableCell>
+                    <InlineEventSelect
+                      value={order.event}
+                      onChange={(v) => updateOrderField(order.id, { event: v })}
+                    />
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground whitespace-nowrap">{order.date}</TableCell>
+                  <TableCell>
+                    <InlineAmountInput
+                      value={order.amountNum}
+                      onChange={(v) => updateOrderField(order.id, { amountNum: v, amount: fmtNum(v) + " zł" })}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <InlineStatusSelect
+                      value={order.status}
+                      onChange={(v) => updateOrderField(order.id, { status: v })}
+                    />
+                  </TableCell>
+                  <TableCell className={ordersListStickyActionCellClass}>
+                    <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                      <button type="button" onClick={() => openDetail(order)} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+                        <Eye className="w-4 h-4" />
+                      </button>
+                      <button type="button" onClick={() => openEdit(order)} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                      <button type="button" onClick={() => handleDeleteOrder(order.dbId)} className="p-1.5 rounded-md text-destructive/60 hover:text-destructive hover:bg-destructive/10 transition-colors">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </table>
+        </div>
       </div>
 
       <AddOrderSheet

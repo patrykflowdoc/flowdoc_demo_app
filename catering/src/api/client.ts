@@ -179,8 +179,12 @@ export interface SubmitOrderPayload {
     contactBuildingNumber?: string;
     contactApartmentNumber?: string;
     eventDate?: string | null;
+    eventTime?: string | null;
     eventType?: string;
     guestCount?: number;
+    companyName?: string | null;
+    companyNip?: string | null;
+    cateringType?: string | null;
     deliveryZoneId?: string | null;
     deliveryPrice?: number;
     paymentMethod?: string;

@@ -4,8 +4,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { User, Mail, Phone, MessageSquare, MapPin, Building2, Home, Truck, AlertCircle, CheckCircle2, Loader2, Briefcase } from "lucide-react";
-import { useState, useCallback, useRef } from "react";
-import { calculateDelivery as apiCalculateDelivery } from "@/api/client";
+import { useState, useCallback, useRef, useEffect } from "react";
+import { calculateDelivery as apiCalculateDelivery, getCompanySettings } from "@/api/client";
 import type { CateringType } from "@/lib/pricing";
 
 export interface DeliveryConfig {
@@ -65,7 +65,40 @@ export function ContactForm({
   const [deliveryResult, setDeliveryResult] = useState<DeliveryResult | null>(null);
   const [deliveryError, setDeliveryError] = useState<string | null>(null);
   const [calculating, setCalculating] = useState(false);
+  const [pickupAddressText, setPickupAddressText] = useState<string | null>(null);
+  const [pickupAddressLoading, setPickupAddressLoading] = useState(false);
   const debounceRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (cateringType !== "odbior_osobisty") {
+      setPickupAddressText(null);
+      setPickupAddressLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setPickupAddressLoading(true);
+    getCompanySettings()
+      .then((data) => {
+        if (cancelled) return;
+        const raw = String(data.address ?? "").trim();
+        const full = String(
+          (data as { companyAddressFull?: string }).companyAddressFull ??
+            (data as { company_address_full?: string }).company_address_full ??
+            ""
+        ).trim();
+        const text = raw || full || null;
+        setPickupAddressText(text);
+      })
+      .catch(() => {
+        if (!cancelled) setPickupAddressText(null);
+      })
+      .finally(() => {
+        if (!cancelled) setPickupAddressLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [cateringType]);
 
   const calculateDelivery = useCallback(async (city: string, street: string, building: string) => {
     if (!city.trim() || !street.trim() || !building.trim()) {
@@ -128,6 +161,16 @@ export function ContactForm({
     setCalculating(false);
   }, [deliveryConfig, orderTotal, onDeliveryCalculated]);
 
+  useEffect(() => {
+    if (cateringType === "odbior_osobisty" || cateringType === "na_sali") {
+      setDeliveryResult(null);
+      setDeliveryError(null);
+      onDeliveryCalculated(0, null);
+    }
+    // Intentionally omit onDeliveryCalculated — parent przekazuje inline callback; reset przy zmianie trybu.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cateringType]);
+
   const debouncedCalculate = useCallback((city: string, street: string, building: string) => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = window.setTimeout(() => {
@@ -186,8 +229,8 @@ export function ContactForm({
             </div>
           </div>
 
-          {/* Address section */}
-          { cateringType === "wyjazdowy" ? (
+          {/* Address section — tylko dostawa pod adres */}
+          {cateringType === "wyjazdowy" ? (
           <div className="pt-4 border-t border-border">
           <div className="flex items-center gap-2 mb-4">
             <MapPin className="w-4 h-4 text-primary" />
@@ -271,7 +314,37 @@ export function ContactForm({
               ) : null}
             </div>
           )}
-        </div>) : null }
+        </div>
+          ) : cateringType === "odbior_osobisty" ? (
+            <div className="pt-4 border-t border-border">
+              <div className="flex items-start gap-3 p-4 rounded-lg bg-muted/50 border border-border">
+                <MapPin className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <p className="font-medium text-foreground">Odbiór osobisty</p>
+                  {pickupAddressLoading ? (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                      <span>Ładowanie adresu…</span>
+                    </div>
+                  ) : pickupAddressText ? (
+                    <address className="not-italic text-sm text-foreground leading-relaxed whitespace-pre-line border-l-2 border-primary/30 pl-3">
+                      {pickupAddressText}
+                    </address>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      Adres punktu odbioru pojawi się po skonfigurowaniu danych firmy. Podaj dane kontaktowe powyżej —
+                      doprecyzujemy odbiór po złożeniu zamówienia.
+                    </p>
+                  )}
+                  {pickupAddressText ? (
+                    <p className="text-xs text-muted-foreground">
+                      {/* Godziny i szczegóły odbioru możemy ustalić telefonicznie po złożeniu zamówienia. */}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          ) : null}
           
 
           {/* Company section */}

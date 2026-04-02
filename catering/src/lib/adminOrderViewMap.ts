@@ -1,6 +1,14 @@
 import type { Dish } from "@/data/products";
 import type { AdminOrder } from "@/lib/schemas/orders";
 import type { Order, OrderItem, OrderStatus } from "@/types/orders";
+import type { CateringType } from "@/lib/pricing";
+
+const CATERING_TYPE_VALUES = new Set<CateringType>(["wyjazdowy", "na_sali", "odbior_osobisty"]);
+
+function parseCateringType(raw: unknown): CateringType | null {
+  if (typeof raw !== "string" || !CATERING_TYPE_VALUES.has(raw as CateringType)) return null;
+  return raw as CateringType;
+}
 
 export function mapApiDishToOrderDish(raw: unknown): Dish | undefined {
   if (raw == null || typeof raw !== "object") return undefined;
@@ -28,6 +36,7 @@ export function mapApiDishToOrderDish(raw: unknown): Dish | undefined {
 export function mapAdminApiOrderToOrder(
   o: AdminOrder,
   formatOrderDate: (dateStr: string | null) => string,
+  formatOrderTime: (timeStr: string | null) => string,
   fmtNum: (n: number) => string
 ): Order {
   const orderItems = o.orderItems ?? [];
@@ -48,16 +57,23 @@ export function mapAdminApiOrderToOrder(
       }),
     };
   });
-
   return {
     id: String(o.orderNumber ?? ""),
     dbId: String(o.id ?? ""),
+    cateringType: parseCateringType(o.cateringType),
     clientId: o.clientId ? String(o.clientId) : null,
     client: o.clientName ?? "",
     email: o.clientEmail ?? "",
     phone: o.clientPhone ?? "",
+    companyName: o.companyName != null && o.companyName !== "" ? String(o.companyName) : null,
+    companyNip: o.companyNip != null && o.companyNip !== "" ? String(o.companyNip) : null,
+    contactCity: o.contactCity != null && String(o.contactCity).trim() !== "" ? String(o.contactCity) : null,
+    contactStreet: o.contactStreet != null && String(o.contactStreet).trim() !== "" ? String(o.contactStreet) : null,
+    contactBuilding: o.contactBuilding != null && String(o.contactBuilding).trim() !== "" ? String(o.contactBuilding) : null,
+    contactApartment: o.contactApartment != null && String(o.contactApartment).trim() !== "" ? String(o.contactApartment) : null,
     event: o.eventType ?? "",
     date: formatOrderDate(o.eventDate != null ? String(o.eventDate) : null),
+    time: formatOrderTime(o.eventTime != null ? String(o.eventTime) : null),
     deliveryAddress: o.deliveryAddress ?? "",
     amount: fmtNum(Number(o.amount ?? 0)) + " zł",
     amountNum: Number(o.amount ?? 0),

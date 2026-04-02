@@ -11,7 +11,15 @@ import { useState, useEffect, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import * as api from "@/api/client";
 import { Separator } from "@/components/ui/separator";
-import { getSimplePrice, getVariantPrice, getConfigurablePrice, getExtraPrice, getPackagingPrice, getWaiterPrice } from "@/lib/pricing";
+import {
+  getSimplePrice,
+  getVariantPrice,
+  getConfigurablePrice,
+  getExtraPrice,
+  getPackagingPrice,
+  getWaiterPrice,
+  includesDeliveryFee,
+} from "@/lib/pricing";
 
 type OrderSummaryProps = {
   order: CateringOrder;
@@ -62,7 +70,7 @@ export function OrderSummary({
   // Build ordered items list
   type SummaryLine = { name: string; quantity: number; price: number; note?: string; time?: string; bail?: number };
   const productLines: SummaryLine[] = [];
-
+  console.log(order.eventTime);
   for (const [productId, qty] of Object.entries(order.simpleQuantities)) {
     if (qty > 0) {
       const product = products.find(p => p.id === productId);
@@ -220,7 +228,7 @@ export function OrderSummary({
         })),
       ];
 
-      if (order.deliveryPrice > 0) {
+      if (includesDeliveryFee(order.cateringType) && order.deliveryPrice > 0) {
         stripeLineItems.push({
           name: "Dostawa",
           quantity: 1,
@@ -395,7 +403,7 @@ export function OrderSummary({
         </>
       )}
       {/* Delivery */}
-      {order.deliveryPrice > 0 && (
+      {includesDeliveryFee(order.cateringType) && order.deliveryPrice > 0 && (
         <div className="flex items-baseline justify-between text-sm mb-2">
           <span className="text-muted-foreground flex items-center gap-1.5">
             <Truck className="w-4 h-4" />

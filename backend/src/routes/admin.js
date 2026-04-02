@@ -198,6 +198,9 @@ router.patch("/clients/:id", requireCsrf, async (req, res) => {
   if (b.postalCode !== undefined) data.postalCode = b.postalCode;
   if (b.companyName !== undefined) data.companyName = b.companyName;
   if (b.nip !== undefined) data.nip = b.nip;
+  if (b.companyAddress !== undefined) data.companyAddress = b.companyAddress;
+  if (b.companyCity !== undefined) data.companyCity = b.companyCity;
+  if (b.companyPostalCode !== undefined) data.companyPostalCode = b.companyPostalCode;
   if (b.notes !== undefined) data.notes = b.notes;
   const updated = await prisma.client.update({ where: { id }, data });
   res.json(updated);

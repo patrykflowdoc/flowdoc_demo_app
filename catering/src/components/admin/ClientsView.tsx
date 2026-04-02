@@ -52,9 +52,78 @@ const fmtDate = (d: string) => {
   return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
 };
 
+/** Klient B2B: jeśli jest firma + NIP, a adres był zapisany w polach „osobowych”, przenieś go do danych firmy. */
+export function normalizeB2BAddressFields(row: {
+  companyName: string;
+  nip: string;
+  companyAddress: string;
+  companyCity: string;
+  companyPostalCode: string;
+  address: string;
+  city: string;
+  postalCode: string;
+}): Pick<
+  ClientData,
+  "companyAddress" | "companyCity" | "companyPostalCode" | "address" | "city" | "postalCode"
+> {
+  const hasCompany = row.companyName.trim().length > 0 && row.nip.trim().length > 0;
+  if (!hasCompany) {
+    return {
+      companyAddress: row.companyAddress,
+      companyCity: row.companyCity,
+      companyPostalCode: row.companyPostalCode,
+      address: row.address,
+      city: row.city,
+      postalCode: row.postalCode,
+    };
+  }
+  const hasPersonal =
+    row.address.trim().length > 0 || row.city.trim().length > 0 || row.postalCode.trim().length > 0;
+  const hasCompanyLoc =
+    row.companyAddress.trim().length > 0 ||
+    row.companyCity.trim().length > 0 ||
+    row.companyPostalCode.trim().length > 0;
+  if (hasPersonal && !hasCompanyLoc) {
+    return {
+      companyAddress: row.address,
+      companyCity: row.city,
+      companyPostalCode: row.postalCode,
+      address: "",
+      city: "",
+      postalCode: "",
+    };
+  }
+  return {
+    companyAddress: row.companyAddress,
+    companyCity: row.companyCity,
+    companyPostalCode: row.companyPostalCode,
+    address: row.address,
+    city: row.city,
+    postalCode: row.postalCode,
+  };
+}
+
 function mapApiClientsToClientData(data: Record<string, unknown>[]): ClientData[] {
   return (data || []).map((c: Record<string, unknown>) => {
     const createdAt = c.createdAt != null ? new Date(c.createdAt as string).toISOString() : "";
+    const companyName = String(c.companyName ?? "");
+    const nip = String(c.nip ?? "");
+    const companyAddress = String(c.companyAddress ?? "");
+    const companyCity = String(c.companyCity ?? "");
+    const companyPostalCode = String(c.companyPostalCode ?? "");
+    const address = String(c.address ?? "");
+    const city = String(c.city ?? "");
+    const postalCode = String(c.postalCode ?? "");
+    const loc = normalizeB2BAddressFields({
+      companyName,
+      nip,
+      companyAddress,
+      companyCity,
+      companyPostalCode,
+      address,
+      city,
+      postalCode,
+    });
     return {
       id: String(c.id),
       firstName: String(c.firstName ?? ""),
@@ -62,14 +131,14 @@ function mapApiClientsToClientData(data: Record<string, unknown>[]): ClientData[
       email: String(c.email ?? ""),
       phone: String(c.phone ?? ""),
       phoneAlt: String(c.phoneAlt ?? ""),
-      companyName: String(c.companyName ?? ""),
-      nip: String(c.nip ?? ""),
-      companyAddress: String(c.companyAddress ?? ""),
-      companyCity: String(c.companyCity ?? ""),
-      companyPostalCode: String(c.companyPostalCode ?? ""),
-      address: String(c.address ?? ""),
-      city: String(c.city ?? ""),
-      postalCode: String(c.postalCode ?? ""),
+      companyName,
+      nip,
+      companyAddress: loc.companyAddress,
+      companyCity: loc.companyCity,
+      companyPostalCode: loc.companyPostalCode,
+      address: loc.address,
+      city: loc.city,
+      postalCode: loc.postalCode,
       notes: String(c.notes ?? ""),
       orders: Number(c.orders ?? 0),
       totalSpent: fmtPLN(Number(c.totalSpent ?? 0)) + " zł",
@@ -167,29 +236,40 @@ const ClientsView = () => {
   };
 
   const handleSave = async (client: ClientData) => {
+    const loc = normalizeB2BAddressFields({
+      companyName: client.companyName,
+      nip: client.nip,
+      companyAddress: client.companyAddress,
+      companyCity: client.companyCity,
+      companyPostalCode: client.companyPostalCode,
+      address: client.address,
+      city: client.city,
+      postalCode: client.postalCode,
+    });
+    const c = { ...client, ...loc };
     const payload = {
-      firstName: client.firstName,
-      lastName: client.lastName,
-      email: client.email,
-      phone: client.phone,
-      phoneAlt: client.phoneAlt || null,
-      companyName: client.companyName || null,
-      nip: client.nip || null,
-      companyAddress: client.companyAddress || null,
-      companyCity: client.companyCity || null,
-      companyPostalCode: client.companyPostalCode || null,
-      address: client.address || null,
-      city: client.city || null,
-      postalCode: client.postalCode || null,
-      notes: client.notes || null,
+      firstName: c.firstName,
+      lastName: c.lastName,
+      email: c.email,
+      phone: c.phone,
+      phoneAlt: c.phoneAlt || null,
+      companyName: c.companyName || null,
+      nip: c.nip || null,
+      companyAddress: c.companyAddress || null,
+      companyCity: c.companyCity || null,
+      companyPostalCode: c.companyPostalCode || null,
+      address: c.address || null,
+      city: c.city || null,
+      postalCode: c.postalCode || null,
+      notes: c.notes || null,
     };
 
-    const exists = clients.find((c) => c.id === client.id);
+    const exists = clients.find((row) => row.id === c.id);
     try {
       if (exists) {
-        await api.updateClient(client.id, payload);
+        await api.updateClient(c.id, payload);
       } else {
-        await api.createClient({ id: client.id, ...payload });
+        await api.createClient({ id: c.id, ...payload });
       }
     } catch (err: unknown) {
       toast.error("Błąd zapisu: " + (err instanceof Error ? err.message : String(err)));
@@ -198,7 +278,7 @@ const ClientsView = () => {
 
     toast.success("Zapisano");
     fetchClients();
-    setSelectedClient(client);
+    setSelectedClient(c);
   };
 
   const handleDelete = async (client: ClientData) => {

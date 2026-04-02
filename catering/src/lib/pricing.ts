@@ -1,7 +1,24 @@
 import type { Product, SimpleProduct, ConfigurableProduct, ProductVariant } from "@/data/products";
 import type { ExtraItem, PackagingOption, WaiterServiceOption, ExtraVariant } from "@/data/extras";
 
-export type CateringType = "wyjazdowy" | "na_sali";
+export type CateringType = "wyjazdowy" | "na_sali" | "odbior_osobisty";
+
+export function isNaSaliCatering(cateringType: CateringType): boolean {
+  return cateringType === "na_sali";
+}
+
+/** Catering wyjazdowy / odbiór — ten sam przepływ co „Catering” w kreatorze (nie na sali). */
+export function isOffPremiseCatering(cateringType: CateringType): boolean {
+  return cateringType === "wyjazdowy" || cateringType === "odbior_osobisty";
+}
+
+export function needsDeliveryAddress(cateringType: CateringType): boolean {
+  return cateringType === "wyjazdowy";
+}
+
+export function includesDeliveryFee(cateringType: CateringType): boolean {
+  return cateringType === "wyjazdowy";
+}
 
 /** Get effective price for a simple product */
 export function getSimplePrice(product: SimpleProduct, cateringType: CateringType): number {

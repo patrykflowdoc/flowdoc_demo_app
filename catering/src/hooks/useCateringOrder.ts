@@ -2,7 +2,16 @@ import { useState, useMemo, useCallback } from "react";
 import type { EventType, Product } from "@/data/products";
 import type { ExtraItem, PackagingOption, WaiterServiceOption, ExpandableExtra } from "@/data/extras";
 import type { CateringType } from "@/lib/pricing";
-import { getSimplePrice, getVariantPrice, getConfigurablePrice, getExtraPrice, getPackagingPrice, getWaiterPrice, getExtraBundleVariantPrice } from "@/lib/pricing";
+import {
+  getSimplePrice,
+  getVariantPrice,
+  getConfigurablePrice,
+  getExtraPrice,
+  getPackagingPrice,
+  getWaiterPrice,
+  getExtraBundleVariantPrice,
+  includesDeliveryFee,
+} from "@/lib/pricing";
 
 export type OrderItem = {
   productId: string;
@@ -171,10 +180,10 @@ export function useCateringOrder(
         total += getWaiterPrice(service, ct) * order.waiterCount;
       }
     }
-    // Delivery cost
-    total += order.deliveryPrice;
+    if (includesDeliveryFee(order.cateringType)) {
+      total += order.deliveryPrice;
+    }
 
-    
     return total;
   }, [order.cateringType, order.simpleQuantities, order.expandableQuantities, order.configurableData, order.selectedExtras, order.selectedExpandableExtras, order.selectedPackaging, order.packagingPersonCount, order.selectedWaiterService, order.waiterCount, order.deliveryPrice, products, extraItems, packagingOptionsList, waiterServiceOptionsList, extraBundles]);
 

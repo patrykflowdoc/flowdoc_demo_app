@@ -11,6 +11,7 @@ import {
 import { cn } from "@/lib/utils";
 import * as api from "@/api/client";
 import type { ClientData } from "./ClientsView";
+import { normalizeB2BAddressFields } from "./ClientsView";
 
 const statusColors: Record<string, string> = {
   "Nowe zamówienie": "bg-blue-50 text-blue-700 border-blue-200",
@@ -47,7 +48,19 @@ const ClientDetailView = ({ client, onBack, onSave }: Props) => {
   const [form, setForm] = useState<ClientData>(client);
   const [orders, setOrders] = useState<ClientOrder[]>([]);
 
-  useEffect(() => { setForm(client); }, [client]);
+  useEffect(() => {
+    const loc = normalizeB2BAddressFields({
+      companyName: client.companyName,
+      nip: client.nip,
+      companyAddress: client.companyAddress,
+      companyCity: client.companyCity,
+      companyPostalCode: client.companyPostalCode,
+      address: client.address,
+      city: client.city,
+      postalCode: client.postalCode,
+    });
+    setForm({ ...client, ...loc });
+  }, [client]);
 
   useEffect(() => {
     const fetchOrders = async () => {
@@ -95,7 +108,7 @@ const ClientDetailView = ({ client, onBack, onSave }: Props) => {
   const handleSave = () => onSave(form);
 
   const fullName = `${form.firstName} ${form.lastName}`.trim() || "Nowy klient";
-
+  const isB2B = form.companyName.trim().length > 0 && form.nip.trim().length > 0;
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -199,14 +212,20 @@ const ClientDetailView = ({ client, onBack, onSave }: Props) => {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">Miasto</Label>
+                <Label className="text-xs text-muted-foreground">Miasto (firma)</Label>
                 <Input value={form.companyCity} onChange={(e) => set("companyCity", e.target.value)} />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">Kod pocztowy</Label>
+                <Label className="text-xs text-muted-foreground">Kod pocztowy (firma)</Label>
                 <Input value={form.companyPostalCode} onChange={(e) => set("companyPostalCode", e.target.value)} />
               </div>
             </div>
+            {isB2B &&
+              (form.companyAddress.trim() || form.companyCity.trim() || form.companyPostalCode.trim()) && (
+                <p className="text-xs text-muted-foreground pt-1">
+                  Adres dostawy z zamówień jest tu przypisany do siedziby firmy (firma + NIP).
+                </p>
+              )}
           </CardContent>
         </Card>
 

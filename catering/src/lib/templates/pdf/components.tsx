@@ -202,7 +202,7 @@ export function OfferItemsTableBlock({ sectionTitle, items }: { sectionTitle: st
 
 export function OfferOrderDataTableBlock({ order }: { order: Order }) {
   const eventDate = order.date?.trim() ? order.date : "—";
-  const eventTime = "—";
+  const eventTime = order.time?.trim() ? order.time : "—";
   const clientName = order.client?.trim() ? order.client : "—";
   const phone = order.phone?.trim() ? order.phone : "—";
   const deliveryAddress = order.deliveryAddress?.trim() ? order.deliveryAddress : "";

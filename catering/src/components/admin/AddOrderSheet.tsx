@@ -20,6 +20,7 @@ import {
   Clock,
   Loader2,
   MapPin,
+  Package,
   MessageSquare,
   Plus,
   Search,
@@ -33,19 +34,13 @@ import type { DbClient, Order, OrderItem } from "@/types/orders";
 import { OrderLineDishContents } from "./ProductTable";
 import { useAdminEventTypes, SubItemSelector, type CatalogProduct, useCatalogProducts } from "./OrderCatalogPicker";
 import { mapAdminApiOrderToOrder } from "@/lib/adminOrderViewMap";
-
+import { formatOrderTime, formatOrderDate } from "@/components/admin/OrdersView";
+import { includesDeliveryFee, isOffPremiseCatering, type CateringType } from "@/lib/pricing";
 const fmtNum = (n: number) => n.toLocaleString("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 function mapItemType(type?: string) {
   if (!type) return "simple";
   return type === "bundle" ? "expandable" : type;
-}
-
-function formatOrderDate(dateStr: string | null) {
-  if (!dateStr) return "—";
-  const d = new Date(dateStr);
-  const months = ["sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paź", "lis", "gru"];
-  return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
 }
 
 export const AddOrderSheet = ({
@@ -65,7 +60,9 @@ export const AddOrderSheet = ({
   const [clientName, setClientName] = useState("");
   const [clientEmail, setClientEmail] = useState("");
   const [clientPhone, setClientPhone] = useState("");
-  const [cateringType, setCateringType] = useState<"wyjazdowy" | "na_sali">("wyjazdowy");
+  const [orderCompanyName, setOrderCompanyName] = useState("");
+  const [orderCompanyNip, setOrderCompanyNip] = useState("");
+  const [cateringType, setCateringType] = useState<CateringType>("wyjazdowy");
   const [event, setEvent] = useState("");
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
@@ -136,6 +133,7 @@ export const AddOrderSheet = ({
             address: c.address != null ? String(c.address) : null,
             city: c.city != null ? String(c.city) : null,
             companyName: c.companyName != null ? String(c.companyName) : null,
+            nip: c.nip != null ? String(c.nip) : null,
           }))
         );
       })
@@ -309,6 +307,8 @@ export const AddOrderSheet = ({
     setClientName("");
     setClientEmail("");
     setClientPhone("");
+    setOrderCompanyName("");
+    setOrderCompanyNip("");
     setCateringType("wyjazdowy");
     setEvent("");
     setDate("");
@@ -336,10 +336,10 @@ export const AddOrderSheet = ({
       toast.error("Dodaj przynajmniej jedną pozycję");
       return;
     }
-    const effectiveDeliveryCost = cateringType === "na_sali" ? 0 : deliveryCost;
+    const effectiveDeliveryCost = includesDeliveryFee(cateringType) ? deliveryCost : 0;
     const totalPrice = totalAmount + effectiveDeliveryCost;
     const deposit = Number((totalPrice * 0.1).toFixed(2));
-    const orderNotes = [notes.trim(), time ? `Godzina: ${time}` : ""].filter(Boolean).join("\n");
+    const orderNotes = [notes? `${notes}` : ""].filter(Boolean).join("\n");
 
     setIsSubmitting(true);
     try {
@@ -349,10 +349,20 @@ export const AddOrderSheet = ({
           contactName: clientName,
           contactEmail: clientEmail,
           contactPhone: clientPhone,
-          contactCity: cateringType === "na_sali" ? "Na sali" : deliveryCity,
-          contactStreet: cateringType === "na_sali" ? "" : deliveryStreet,
-          contactBuildingNumber: cateringType === "na_sali" ? "" : deliveryBuilding,
+          contactCity:
+            cateringType === "na_sali"
+              ? "Na sali"
+              : cateringType === "odbior_osobisty"
+                ? "Odbiór osobisty"
+                : deliveryCity,
+          contactStreet: cateringType === "na_sali" || cateringType === "odbior_osobisty" ? "" : deliveryStreet,
+          contactBuildingNumber:
+            cateringType === "na_sali" || cateringType === "odbior_osobisty" ? "" : deliveryBuilding,
+          companyName: orderCompanyName.trim() || undefined,
+          companyNip: orderCompanyNip.trim() || undefined,
+          cateringType,
           eventDate: date || null,
+          eventTime: time || null,
           eventType: event || "",
           guestCount: 0,
           deliveryPrice: effectiveDeliveryCost,
@@ -387,7 +397,7 @@ export const AddOrderSheet = ({
 
       try {
         const dbOrder = await api.getAdminOrder(result.orderId);
-        const mapped = mapAdminApiOrderToOrder(dbOrder, formatOrderDate, fmtNum);
+        const mapped = mapAdminApiOrderToOrder(dbOrder, formatOrderDate, formatOrderTime, fmtNum);
         onCreated(mapped);
       } catch {
         if (onRefresh) await onRefresh();
@@ -471,6 +481,18 @@ export const AddOrderSheet = ({
                     <Input placeholder="Email" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} />
                     <Input placeholder="Telefon" value={clientPhone} onChange={(e) => setClientPhone(e.target.value)} />
                   </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      placeholder="Firma (opcjonalnie)"
+                      value={orderCompanyName}
+                      onChange={(e) => setOrderCompanyName(e.target.value)}
+                    />
+                    <Input
+                      placeholder="NIP (opcjonalnie)"
+                      value={orderCompanyNip}
+                      onChange={(e) => setOrderCompanyNip(e.target.value)}
+                    />
+                  </div>
                 </div>
               </div>
             )}
@@ -540,33 +562,91 @@ export const AddOrderSheet = ({
               Rodzaj cateringu
             </Label>
             <div className="grid grid-cols-2 gap-2">
-              {[
-                { id: "wyjazdowy" as const, label: "Wyjazdowy", desc: "Dostawa na adres" },
-                { id: "na_sali" as const, label: "Na sali", desc: "Bez dostawy" },
-              ].map((opt) => (
-                <button
-                  key={opt.id}
-                  onClick={() => {
-                    setCateringType(opt.id);
-                    if (opt.id === "na_sali") {
-                      setDeliveryCost(0);
-                      setDeliveryDistanceKm(null);
-                      setDeliveryError(null);
-                    }
-                  }}
+              <button
+                type="button"
+                onClick={() => {
+                  if (cateringType === "na_sali") setCateringType("wyjazdowy");
+                }}
+                className={cn(
+                  "flex flex-col items-center gap-1 p-3 rounded-lg border-2 transition-all text-sm",
+                  "hover:border-primary focus:outline-none",
+                  isOffPremiseCatering(cateringType) ? "border-primary bg-primary/5" : "border-border"
+                )}
+              >
+                <Truck className={cn("w-4 h-4", isOffPremiseCatering(cateringType) ? "text-primary" : "text-muted-foreground")} />
+                <span
                   className={cn(
-                    "flex flex-col items-center gap-1 p-3 rounded-lg border-2 transition-all text-sm",
-                    "hover:border-primary focus:outline-none",
-                    cateringType === opt.id ? "border-primary bg-primary/5" : "border-border"
+                    "font-medium",
+                    isOffPremiseCatering(cateringType) ? "text-primary" : "text-foreground"
                   )}
                 >
-                  <span className={cn("font-medium", cateringType === opt.id ? "text-primary" : "text-foreground")}>
-                    {opt.label}
-                  </span>
-                  <span className="text-[10px] text-muted-foreground">{opt.desc}</span>
-                </button>
-              ))}
+                  Catering
+                </span>
+                <span className="text-[10px] text-muted-foreground text-center">Poza salą</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setCateringType("na_sali");
+                  setDeliveryCost(0);
+                  setDeliveryDistanceKm(null);
+                  setDeliveryError(null);
+                }}
+                className={cn(
+                  "flex flex-col items-center gap-1 p-3 rounded-lg border-2 transition-all text-sm",
+                  "hover:border-primary focus:outline-none",
+                  cateringType === "na_sali" ? "border-primary bg-primary/5" : "border-border"
+                )}
+              >
+                <span className={cn("font-medium", cateringType === "na_sali" ? "text-primary" : "text-foreground")}>
+                  Na sali
+                </span>
+                <span className="text-[10px] text-muted-foreground text-center">Bez dostawy</span>
+              </button>
             </div>
+
+            {isOffPremiseCatering(cateringType) && (
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setCateringType("wyjazdowy")}
+                  className={cn(
+                    "flex flex-col items-center gap-1 p-2.5 rounded-lg border-2 transition-all text-xs",
+                    "hover:border-primary focus:outline-none",
+                    cateringType === "wyjazdowy" ? "border-primary bg-primary/5" : "border-border"
+                  )}
+                >
+                  <Truck className="w-3.5 h-3.5" />
+                  <span className={cn("font-medium", cateringType === "wyjazdowy" ? "text-primary" : "text-foreground")}>
+                    Dostawa
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCateringType("odbior_osobisty");
+                    setDeliveryCost(0);
+                    setDeliveryDistanceKm(null);
+                    setDeliveryError(null);
+                  }}
+                  className={cn(
+                    "flex flex-col items-center gap-1 p-2.5 rounded-lg border-2 transition-all text-xs",
+                    "hover:border-primary focus:outline-none",
+                    cateringType === "odbior_osobisty" ? "border-primary bg-primary/5" : "border-border"
+                  )}
+                >
+                  <Package className="w-3.5 h-3.5" />
+                  <span
+                    className={cn(
+                      "font-medium",
+                      cateringType === "odbior_osobisty" ? "text-primary" : "text-foreground"
+                    )}
+                  >
+                    Odbiór
+                  </span>
+                </button>
+              </div>
+            )}
           </div>
 
           {cateringType === "wyjazdowy" && (
@@ -740,7 +820,7 @@ export const AddOrderSheet = ({
                     <span>Produkty</span>
                     <span>{fmtNum(totalAmount)} zł</span>
                   </div>
-                  {cateringType === "wyjazdowy" && deliveryCost > 0 && (
+                  {includesDeliveryFee(cateringType) && deliveryCost > 0 && (
                     <div className="flex justify-between text-xs text-muted-foreground">
                       <span>Dostawa</span>
                       <span>{fmtNum(deliveryCost)} zł</span>
@@ -749,7 +829,7 @@ export const AddOrderSheet = ({
                   <div className="flex justify-between">
                     <span className="text-sm font-bold">Razem</span>
                     <span className="text-sm font-bold text-primary">
-                      {fmtNum(totalAmount + (cateringType === "wyjazdowy" ? deliveryCost : 0))} zł
+                      {fmtNum(totalAmount + (includesDeliveryFee(cateringType) ? deliveryCost : 0))} zł
                     </span>
                   </div>
                 </div>

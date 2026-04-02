@@ -1,4 +1,4 @@
-import { useMemo, useCallback, useEffect } from "react";
+import { useMemo, useCallback, useEffect, useRef } from "react";
 import { toast } from "@/components/ui/sonner";
 import { useCateringOrder } from "@/hooks/useCateringOrder";
 import { useAppData } from "@/hooks/useAppData";
@@ -167,6 +167,27 @@ export function CateringWizard() {
     updateOrder,
   ]);
 
+  const prevCateringTypeRef = useRef(order.cateringType);
+  useEffect(() => {
+    const prev = prevCateringTypeRef.current;
+    prevCateringTypeRef.current = order.cateringType;
+    if (prev === order.cateringType) return;
+
+    if (order.cateringType !== "wyjazdowy") {
+      updateOrder({
+        deliveryPrice: 0,
+        deliveryZoneId: null,
+        ...(order.cateringType === "na_sali" || order.cateringType === "odbior_osobisty"
+          ? {
+              contactCity: "",
+              contactStreet: "",
+              contactBuildingNumber: "",
+              contactApartmentNumber: "",
+            }
+          : {}),
+      });
+    }
+  }, [order.cateringType, updateOrder]);
 
   const handleSubmit = async (submissionType: SubmissionType = "offer") => {
     return submitOrder(

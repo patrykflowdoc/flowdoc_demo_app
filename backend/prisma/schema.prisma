@@ -406,10 +406,13 @@ model Order {
   clientName       String    @default("")
   clientEmail      String?
   clientPhone      String?
+  companyName      String?
+  companyNip       String?
   eventType        String?
   eventDate        DateTime? @db.Date
   eventTime        DateTime? @db.Time
   guestCount       Int?
+  cateringType     String?
   deliveryAddress  String?
   contactCity       String?
   contactStreet    String?

@@ -48,6 +48,8 @@ export const AdminFoodCostExtraSchema = z.object({
   amount: DecimalJson.default(0),
 });
 
+export const CateringTypeSchema = z.enum(["wyjazdowy", "na_sali", "odbior_osobisty"]);
+
 export const AdminOrderSchema = z
   .object({
     id: z.string(),
@@ -56,7 +58,15 @@ export const AdminOrderSchema = z
     clientName: z.string().default(""),
     clientEmail: z.string().default(""),
     clientPhone: z.string().default(""),
+    companyName: z.string().nullable().optional(),
+    companyNip: z.string().nullable().optional(),
+    contactCity: z.string().nullable().optional(),
+    contactStreet: z.string().nullable().optional(),
+    contactBuilding: z.string().nullable().optional(),
+    contactApartment: z.string().nullable().optional(),
+    cateringType: CateringTypeSchema.nullable().optional(),
     eventDate: z.string().nullable().optional(),
+    eventTime: z.string().nullable().optional(),
     eventType: z.string().default(""),
     deliveryAddress: z.string().nullable().optional().transform((v) => v ?? ""),
     amount: DecimalJson.default(0),

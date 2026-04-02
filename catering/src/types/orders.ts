@@ -2,6 +2,7 @@
  * Order domain types for admin UI and PDFs (aligned with Prisma JSON shapes from the API).
  */
 import type { Dish } from "@/data/products";
+import type { CateringType } from "@/lib/pricing";
 
 /** PDF / admin line sub-row (OrderItemSubItem). */
 export type OrderSubItem = {
@@ -72,13 +73,21 @@ export type OrderStatus =
 export interface Order {
   id: string;
   dbId: string;
+  cateringType: CateringType | null;
   client: string;
   clientId: string | null;
   email: string;
   phone: string;
   event: string;
   date: string;
+  time: string;
   deliveryAddress: string;
+  companyName?: string | null;
+  companyNip?: string | null;
+  contactCity?: string | null;
+  contactStreet?: string | null;
+  contactBuilding?: string | null;
+  contactApartment?: string | null;
   amount: string;
   amountNum: number;
   status: OrderStatus;
@@ -101,6 +110,7 @@ export interface DbClient {
   address?: string | null;
   city?: string | null;
   companyName?: string | null;
+  nip?: string | null;
 }
 
 /** Editable food-cost extra line in the document view. */

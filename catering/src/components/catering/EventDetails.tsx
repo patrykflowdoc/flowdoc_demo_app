@@ -5,15 +5,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import type { EventType } from "@/data/products";
-import type { CateringType } from "@/lib/pricing";
+import { isOffPremiseCatering, type CateringType } from "@/lib/pricing";
 import { cn } from "@/lib/utils";
-import { 
-  Users, 
-  CalendarDays, 
-  ChevronRight, 
+import {
+  Users,
+  CalendarDays,
+  ChevronRight,
   Clock,
   Truck,
   Building2,
+  Package,
 } from "lucide-react";
 import { FullscreenDateTimePicker } from "./FullscreenDateTimePicker";
 
@@ -77,36 +78,122 @@ export function EventDetails({
         <CardHeader className="pb-3">
           <CardTitle className="text-lg">Rodzaj cateringu</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
-            {([
-              { id: "wyjazdowy" as CateringType, label: "Catering", icon: Truck, desc: "Dowozimy na wskazany adres" },
-              { id: "na_sali" as CateringType, label: "Uroczystość na sali", icon: Building2, desc: "Obsługa w naszej sali" },
-            ]).map((option) => {
-              const isSelected = cateringType === option.id;
-              const Icon = option.icon;
-              return (
-                <button
-                  key={option.id}
-                  onClick={() => onCateringTypeChange(option.id)}
-                  className={cn(
-                    "flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all",
-                    "hover:border-primary hover:bg-accent/50 focus:outline-none",
-                    isSelected ? "border-primary bg-primary/5" : "border-border bg-card"
-                  )}
-                >
-                  <div className={cn(
-                    "w-12 h-12 rounded-full flex items-center justify-center transition-colors",
-                    isSelected ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
-                  )}>
-                    <Icon className="w-5 h-5" strokeWidth={1.5} />
-                  </div>
-                  <span className={cn("text-xs font-medium text-center leading-tight", isSelected ? "text-primary" : "text-foreground")}>{option.label}</span>
-                  <span className="text-[10px] text-muted-foreground text-center">{option.desc}</span>
-                </button>
-              );
-            })}
+            <button
+              type="button"
+              onClick={() => {
+                if (cateringType === "na_sali") onCateringTypeChange("wyjazdowy");
+              }}
+              className={cn(
+                "flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all",
+                "hover:border-primary hover:bg-accent/50 focus:outline-none",
+                isOffPremiseCatering(cateringType) ? "border-primary bg-primary/5" : "border-border bg-card"
+              )}
+            >
+              <div
+                className={cn(
+                  "w-12 h-12 rounded-full flex items-center justify-center transition-colors",
+                  isOffPremiseCatering(cateringType) ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                )}
+              >
+                <Truck className="w-5 h-5" strokeWidth={1.5} />
+              </div>
+              <span
+                className={cn(
+                  "text-xs font-medium text-center leading-tight",
+                  isOffPremiseCatering(cateringType) ? "text-primary" : "text-foreground"
+                )}
+              >
+                Catering
+              </span>
+              <span className="text-[10px] text-muted-foreground text-center">Poza salą — dostawa lub odbiór</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onCateringTypeChange("na_sali")}
+              className={cn(
+                "flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all",
+                "hover:border-primary hover:bg-accent/50 focus:outline-none",
+                cateringType === "na_sali" ? "border-primary bg-primary/5" : "border-border bg-card"
+              )}
+            >
+              <div
+                className={cn(
+                  "w-12 h-12 rounded-full flex items-center justify-center transition-colors",
+                  cateringType === "na_sali" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                )}
+              >
+                <Building2 className="w-5 h-5" strokeWidth={1.5} />
+              </div>
+              <span
+                className={cn(
+                  "text-xs font-medium text-center leading-tight",
+                  cateringType === "na_sali" ? "text-primary" : "text-foreground"
+                )}
+              >
+                Uroczystość na sali
+              </span>
+              <span className="text-[10px] text-muted-foreground text-center">Obsługa w naszej sali</span>
+            </button>
           </div>
+
+          {isOffPremiseCatering(cateringType) && (
+            <div className="pt-1 space-y-2">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Sposób realizacji</p>
+              <div className="grid grid-cols-2 gap-2">
+                {(
+                  [
+                    {
+                      id: "wyjazdowy" as const,
+                      label: "Dostawa",
+                      desc: "Na wskazany adres",
+                      icon: Truck,
+                    },
+                    {
+                      id: "odbior_osobisty" as const,
+                      label: "Odbiór osobisty",
+                      desc: "U nas",
+                      icon: Package,
+                    },
+                  ] as const
+                ).map((option) => {
+                  const Icon = option.icon;
+                  const isSelected = cateringType === option.id;
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => onCateringTypeChange(option.id)}
+                      className={cn(
+                        "flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all text-center",
+                        "hover:border-primary hover:bg-accent/50 focus:outline-none",
+                        isSelected ? "border-primary bg-primary/5" : "border-border bg-card"
+                      )}
+                    >
+                      <Icon
+                        className={cn(
+                          "w-4 h-4",
+                          isSelected ? "text-primary" : "text-muted-foreground"
+                        )}
+                        strokeWidth={1.5}
+                      />
+                      <span
+                        className={cn(
+                          "text-[11px] font-medium leading-tight",
+                          isSelected ? "text-primary" : "text-foreground"
+                        )}
+                      >
+                        {option.label}
+                      </span>
+                      <span className="text-[9px] text-muted-foreground leading-tight">{option.desc}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -152,7 +239,9 @@ export function EventDetails({
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
-            {eventTypes.filter((type) => type.isCatering === (cateringType === "wyjazdowy")).map((type) => {
+            {eventTypes
+              .filter((type) => type.isCatering === isOffPremiseCatering(cateringType))
+              .map((type) => {
               const isSelected = eventType?.id === type.id;
               
               return (

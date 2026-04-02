@@ -2,7 +2,16 @@ import { submitOrder as apiSubmitOrder, type SubmitOrderPayload } from "@/api/cl
 import type { CateringOrder } from "@/hooks/useCateringOrder";
 import type { Product } from "@/data/products";
 import type { ExtraItem, PackagingOption, WaiterServiceOption, ExpandableExtra } from "@/data/extras";
-import { getSimplePrice, getVariantPrice, getConfigurablePrice, getExtraPrice, getPackagingPrice, getWaiterPrice, getExtraBundleVariantPrice } from "@/lib/pricing";
+import {
+  getSimplePrice,
+  getVariantPrice,
+  getConfigurablePrice,
+  getExtraPrice,
+  getPackagingPrice,
+  getWaiterPrice,
+  getExtraBundleVariantPrice,
+  includesDeliveryFee,
+} from "@/lib/pricing";
 
 export type SubmissionType = "order" | "offer";
 
@@ -203,7 +212,8 @@ export async function submitOrder(
   }
   // TODO: czy doliczamy kaucje do zaliczki?
   const bail = order.bail;
-  const deposit = Number(((totalPrice + order.deliveryPrice) * 0.1).toFixed(2));
+  const deposit = Number((totalPrice * 0.1).toFixed(2));
+  const deliveryOut = includesDeliveryFee(order.cateringType) ? (order.deliveryPrice ?? 0) : 0;
   const payload = {
     order: {
       contactName: order.contactName,
@@ -213,11 +223,15 @@ export async function submitOrder(
       contactStreet: order.contactStreet,
       contactBuildingNumber: order.contactBuildingNumber,
       contactApartmentNumber: order.contactApartmentNumber,
+      companyName: order.companyName?.trim() || null,
+      companyNip: order.companyNip?.trim() || null,
       eventDate: order.eventDate || null,
+      eventTime: order.eventTime || null,
       eventType: eventType?.name || order.eventType.name,
       guestCount: order.guestCount,
-      deliveryZoneId: order.deliveryZoneId ?? null,
-      deliveryPrice: order.deliveryPrice ?? 0,
+      cateringType: order.cateringType,
+      deliveryZoneId: includesDeliveryFee(order.cateringType) ? (order.deliveryZoneId ?? null) : null,
+      deliveryPrice: deliveryOut,
       paymentMethod: order.paymentMethod,
       notes: order.notes || "",
       deposit: deposit,
