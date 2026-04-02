@@ -245,7 +245,10 @@ const OrderDocumentView = ({ order, docType, onBack }: { order: Order; docType: 
                 <TableBody>
                   {kitchenDishes.map((d, i) => (
                     <TableRow key={i}>
-                      <TableCell className="font-medium">{d.name}</TableCell>
+                      <TableCell className="font-medium">
+                        <div>{d.name}</div>
+                        <OrderLineDishContents contents={d.dish?.contents} />
+                      </TableCell>
                       <TableCell className="text-right whitespace-nowrap">
                         {d.totalQty} {d.unit}
                       </TableCell>

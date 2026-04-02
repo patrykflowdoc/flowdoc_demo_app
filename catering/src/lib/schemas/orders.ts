@@ -58,7 +58,7 @@ export const AdminOrderSchema = z
     clientPhone: z.string().default(""),
     eventDate: z.string().nullable().optional(),
     eventType: z.string().default(""),
-    deliveryAddress: z.string().default(""),
+    deliveryAddress: z.string().nullable().optional().transform((v) => v ?? ""),
     amount: DecimalJson.default(0),
     bail: DecimalJson.default(0),
     status: z.string().default("Nowe zamówienie"),

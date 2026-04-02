@@ -1,7 +1,8 @@
 import { effectiveLineItemType, isAddonLineItem, isExpandableLineItem } from "@/lib/orderLineItems";
 import type { OrderItem } from "@/types/orders";
+import type { Dish } from "@/data/products";
 
-export type KitchenDishRow = { name: string; totalQty: number; unit: string; };
+export type KitchenDishRow = { name: string; totalQty: number; unit: string; dish?: Dish };
 
 function normalizeMultiplier(value: unknown): number {
   const n = Number(value);
@@ -19,7 +20,7 @@ export function calculateKitchenRows(items: OrderItem[]): KitchenDishRow[] {
       item.subItems.map((sub) => {
         const key = sub.dishId ?? sub.name;
         if (!dishMap[key]) {
-          dishMap[key] = { name: sub.name, totalQty: 0, unit: sub.unit};
+          dishMap[key] = { name: sub.name, totalQty: 0, unit: sub.unit, dish: sub.dish };
         }
 
         const optionConv = normalizeMultiplier(sub.optionConverter);
@@ -33,7 +34,7 @@ export function calculateKitchenRows(items: OrderItem[]): KitchenDishRow[] {
 
     const key = item.dishId ?? item.name;
     if (!dishMap[key]) {
-      dishMap[key] = { name: item.name, totalQty: 0, unit: item.unit, };
+      dishMap[key] = { name: item.name, totalQty: 0, unit: item.unit, dish: item.dish };
     }
     dishMap[key].totalQty += item.quantity;
   });

@@ -13,7 +13,18 @@ export function KitchenDishTable({ dishes }: { dishes: KitchenDishRow[] }) {
       </View>
       {dishes.map((d, i) => (
         <View key={i} style={pdfStyles.tableRow} wrap={false}>
-          <Text style={{ flex: 2, fontSize: 9 }}>{d.name}</Text>
+          <View style={{ flex: 2 }}>
+            <Text style={{ fontSize: 9 }}>{d.name}</Text>
+            {(d.dish?.contents ?? []).length > 0 ? (
+              <View style={{ marginTop: 2, paddingLeft: 6 }}>
+                {(d.dish?.contents ?? []).map((c, ci) => (
+                  <Text key={ci} style={{ fontSize: 7, color: "#666" }}>
+                    - {String(c)}
+                  </Text>
+                ))}
+              </View>
+            ) : null}
+          </View>
           <Text style={{ flex: 1, fontSize: 9 }}>
             {d.totalQty} {d.unit}
           </Text>
