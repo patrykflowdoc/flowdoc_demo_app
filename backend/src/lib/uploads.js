@@ -98,12 +98,25 @@ export function toUploadUrl(absPath) {
 
 function getUploadAbsPathFromUrl(urlValue) {
   if (typeof urlValue !== "string" || urlValue.length === 0) return null;
-  const parsed = new URL(urlValue, "http://localhost");
+  let parsed;
+  try {
+    parsed = new URL(urlValue, "http://localhost");
+  } catch {
+    return null;
+  }
   if (!parsed.pathname.startsWith("/uploads/")) return null;
-  const rel = parsed.pathname.slice("/uploads/".length);
-  const abs = path.resolve(UPLOAD_DIR, rel);
-  const uploadRootWithSep = `${UPLOAD_DIR}${path.sep}`;
-  if (!abs.startsWith(uploadRootWithSep)) return null;
+  const relFromUrl = parsed.pathname.slice("/uploads/".length);
+  if (relFromUrl.length === 0 || relFromUrl.includes("\0")) return null;
+  /** POSIX-style segments; URL pathnames use "/" even on Windows. */
+  const segments = relFromUrl.split("/").filter((s) => s.length > 0);
+  if (segments.some((s) => s === "..")) return null;
+
+  const root = UPLOAD_DIR;
+  const abs = path.resolve(root, ...segments);
+  const relToRoot = path.relative(root, abs);
+  if (relToRoot === "" || relToRoot.startsWith("..") || path.isAbsolute(relToRoot)) {
+    return null;
+  }
   return abs;
 }
 
