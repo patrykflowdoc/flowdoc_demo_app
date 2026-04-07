@@ -273,7 +273,7 @@ const OrderDocumentView = ({ order, docType, onBack }: { order: Order; docType: 
                         <OrderLineDishContents contents={d.dish?.contents} />
                       </TableCell>
                       <TableCell className="text-right whitespace-nowrap">
-                        {d.totalQty} {d.unit}
+                        {d.totalQty} .szt
                       </TableCell>
                     </TableRow>
                   ))}

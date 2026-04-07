@@ -3,7 +3,11 @@ import type { Order, OrderItem } from "@/types/orders";
 import { effectiveLineItemType, isExpandableLineItem } from "@/lib/orderLineItems";
 import { fmtPdfNum } from "./fmt";
 import { pdfStyles } from "./styles";
-import logoImage from "@/assets/logo.png";
+import qr_fb from "@/assets/qr_fb.png";
+import qr_ig from "@/assets/qr_ig.png";
+import icon_fb from "@/assets/icon_fb.png";
+import icon_ig from "@/assets/icon_ig.png";
+
 
 const SUBROW_NO_DETAILS = "Brak wybranych opcji/wariantów";
 
@@ -65,6 +69,7 @@ function SubRow({ label, qtyText }: { label: string; qtyText: string }) {
 }
 
 export type OfferContactData = {
+  logoUrl?: string;
   phone: string;
   email: string;
   address: string;
@@ -77,18 +82,35 @@ export function OfferContactTableBlock({
   sectionTitle: string;
   contact: OfferContactData;
 }) {
+  const logoUrl = contact?.logoUrl || null;
   const phoneValue = contact.phone || "—";
   const emailValue = contact.email || "—";
   const addressValue = contact.address || "—";
   return (
     <View style={{ marginBottom: 10 }}>
       <View style={{ flexDirection: "row", borderWidth: 0.5, borderColor: "#d2dbd7" }}>
-        <View style={{ width: "70%", padding: 10 }}>
+        <View style={{ width: "40%", padding: 10 }}>
           <Text style={{ fontSize: 22, color: "#2d9c6d", fontWeight: "bold", marginBottom: 8 }}>{sectionTitle}</Text>
           <ContactLine icon="phone" value={phoneValue} />
           <ContactLine icon="globe" value="www.szczypta.smaku.com" />
           <ContactLine icon="mapPin" value={addressValue} />
           <ContactLine icon="mail" value={emailValue} />
+        </View>
+        <View style={{ flex: 1, flexDirection: "row", justifyContent: "space-evenly", alignItems: "flex-start", paddingVertical: 8 }}>
+          <View style={{ alignItems: "center", width: 72 }}>
+            <Image src={qr_fb} style={{ width: 60, height: 60, objectFit: "contain", marginBottom: 4 }} />
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <Image src={icon_fb} style={{ width: 14, height: 14, objectFit: "contain", marginRight: 4 }} />
+              <Text style={{ fontSize: 9 }}>Facebook</Text>
+            </View>
+          </View>
+          <View style={{ alignItems: "center", width: 72 }}>
+            <Image src={qr_ig} style={{ width: 60, height: 60, objectFit: "contain", marginBottom: 4 }} />
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <Image src={icon_ig} style={{ width: 14, height: 14, objectFit: "contain", marginRight: 4 }} />
+              <Text style={{ fontSize: 9 }}>Instagram</Text>
+            </View>
+          </View>
         </View>
         <View
           style={{
@@ -101,7 +123,7 @@ export function OfferContactTableBlock({
             paddingVertical: 12,
           }}
         >
-          <Image src={logoImage} style={{ width: 120, objectFit: "contain" }} />
+          {logoUrl ? <Image src={logoUrl} style={{ width: 120, objectFit: "contain" }} /> : null}
         </View>
       </View>
     </View>

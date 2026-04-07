@@ -54,6 +54,42 @@ export function asText(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+/** Logo path or URL suitable for fetch / react-pdf Image (absolute http(s), data URI, or site-relative). */
+function resolveAbsoluteLogoUrl(raw: string): string | null {
+  let u = raw.trim();
+  if (!u) return null;
+  // Stored as "/data:image/..." — treat as data URI, not site path
+  if (/^\/data:/i.test(u)) u = u.slice(1);
+  if (/^data:/i.test(u) || /^https?:\/\//i.test(u)) return u;
+  if (typeof window === "undefined") return null;
+  const path = u.startsWith("/") ? u : `/${u}`;
+  return `${window.location.origin}${path}`;
+}
+
+async function logoSrcToPngDataUrl(absoluteUrl: string): Promise<string | null> {
+  let src = absoluteUrl.trim();
+  if (!src) return null;
+  try {
+    const res = await fetch(src, { credentials: "include" }); // if /uploads needs cookies
+    const blob = await res.blob();
+    const bmp = await createImageBitmap(blob);
+    const canvas = document.createElement("canvas");
+    canvas.width = bmp.width;
+    canvas.height = bmp.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      bmp.close();
+      return null;
+    }
+    ctx.drawImage(bmp, 0, 0);
+    bmp.close();
+    // react-pdf accepts png/jpeg from data URIs
+    return canvas.toDataURL("image/png");
+  } catch {
+    return null;
+  }
+}
+
 export async function generateOfferPdf(order: PdfOrderDocumentData): Promise<void> {
   let companySettings: { [key: string]: unknown } = {};
   try {
@@ -61,7 +97,12 @@ export async function generateOfferPdf(order: PdfOrderDocumentData): Promise<voi
   } catch {
     companySettings = {};
   }
+  const rawLogo = asText(companySettings.logoUrl);
+  const logoAbsolute = resolveAbsoluteLogoUrl(rawLogo);
+  const logoForPdf =
+    logoAbsolute != null ? ((await logoSrcToPngDataUrl(logoAbsolute)) ?? "") : "";
   const contact = {
+    logoUrl: logoForPdf,
     phone: asText(companySettings.phone),
     email: asText(companySettings.email),
     address: asText(companySettings.address),
