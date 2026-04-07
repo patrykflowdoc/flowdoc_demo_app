@@ -51,17 +51,34 @@ type Props = {
 
 const ImageUpload = ({ image, onChange }: { image: string | null; onChange: (img: string | null) => void }) => {
   const fileRef = useRef<HTMLInputElement>(null);
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const [uploading, setUploading] = useState(false);
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    onChange(URL.createObjectURL(file));
+    setUploading(true);
+    try {
+      const uploaded = await api.uploadAdminImage(file, "extra");
+      onChange(uploaded.url);
+      toast.success("Zdjęcie przesłane");
+    } catch (err: unknown) {
+      toast.error("Błąd uploadu: " + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
   };
   return (
     <div className="space-y-1">
       <Label className="text-xs">Zdjęcie</Label>
-      <button type="button" onClick={() => fileRef.current?.click()}
+      <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
         className={cn("w-20 h-20 rounded-lg border-2 border-dashed border-border flex items-center justify-center overflow-hidden hover:border-primary/50 transition-colors", image && "border-solid border-border")}>
-        {image ? <img src={image} alt="" className="w-full h-full object-cover" /> : <ImagePlus className="w-6 h-6 text-muted-foreground" />}
+        {uploading ? (
+          <span className="text-[10px] text-muted-foreground">...</span>
+        ) : image ? (
+          <img src={image} alt="" className="w-full h-full object-cover" />
+        ) : (
+          <ImagePlus className="w-6 h-6 text-muted-foreground" />
+        )}
       </button>
       <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
     </div>

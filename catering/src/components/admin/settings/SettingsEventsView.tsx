@@ -121,7 +121,7 @@ const SettingsEventsView = () => {
           id: String(e.id),
           name: String(e.name ?? ""),
           icon: (e.icon as LucideIconName) || "CalendarDays",
-          sort_order: Number(e.sortOrder ?? e.sort_order ?? 0),
+          sort_order: Number(e.sortOrder ?? 0),
           isCatering: Boolean(e.isCatering ?? true),
         })));
       })
@@ -133,7 +133,7 @@ const SettingsEventsView = () => {
           id: String(e.id),
           name: String(e.name ?? ""),
           icon: (e.icon as LucideIconName) || "CalendarDays",
-          sort_order: Number(e.sortOrder ?? e.sort_order ?? 0),
+          sort_order: Number(e.sortOrder ?? 0),
         })));
       }).catch(console.error)
       .finally(() => setLoading(false));
@@ -152,7 +152,7 @@ const SettingsEventsView = () => {
         id: String(data.id),
         name: String(data.name ?? ""),
         icon: (data.icon as LucideIconName) || "CalendarDays",
-        sort_order: Number(data.sortOrder ?? data.sort_order ?? 0),
+        sort_order: Number(data.sortOrder ?? 0),
         isCatering: Boolean(data.isCatering ?? true),
       }]);
       setNewEventName("");
@@ -239,7 +239,7 @@ const SettingsEventsView = () => {
         id: String(data.id),
         name: String(data.name ?? ""),
         icon: (data.icon as LucideIconName) || "CalendarDays",
-        sort_order: Number(data.sortOrder ?? data.sort_order ?? 0),
+        sort_order: Number(data.sortOrder ?? 0),
       }]);
       setNewExtraCategoryName("");
       setNewExtraCategoryIcon("CalendarDays");

@@ -91,19 +91,44 @@ interface ExtraBundle {
 }
 
 // ===== IMAGE UPLOAD =====
-const ImageUpload = ({ image, onChange }: { image: string | null; onChange: (img: string | null) => void }) => {
+const ImageUpload = ({
+  image,
+  onChange,
+  uploadKind,
+}: {
+  image: string | null;
+  onChange: (img: string | null) => void;
+  uploadKind: api.AdminImageKind;
+}) => {
   const fileRef = useRef<HTMLInputElement>(null);
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const [uploading, setUploading] = useState(false);
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    onChange(URL.createObjectURL(file));
+    setUploading(true);
+    try {
+      const uploaded = await api.uploadAdminImage(file, uploadKind);
+      onChange(uploaded.url);
+      toast.success("Zdjęcie przesłane");
+    } catch (err: unknown) {
+      toast.error("Błąd uploadu: " + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
   };
   return (
     <div className="space-y-1">
       <Label className="text-xs">Zdjęcie</Label>
-      <button type="button" onClick={() => fileRef.current?.click()}
+      <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
         className={cn("w-20 h-20 rounded-lg border-2 border-dashed border-border flex items-center justify-center overflow-hidden hover:border-primary/50 transition-colors", image && "border-solid border-border")}>
-        {image ? <img src={image} alt="" className="w-full h-full object-cover" /> : <ImagePlus className="w-6 h-6 text-muted-foreground" />}
+        {uploading ? (
+          <Loader2 className="w-5 h-5 text-muted-foreground animate-spin" />
+        ) : image ? (
+          <img src={image} alt="" className="w-full h-full object-cover" />
+        ) : (
+          <ImagePlus className="w-6 h-6 text-muted-foreground" />
+        )}
       </button>
       <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
     </div>
@@ -448,20 +473,28 @@ const DishesTab = ({ dishes, ingredients, categories, reload }: { dishes: Dish[]
     setSaving(true);
     const priceBrutto = parseFloat(formPriceBrutto) || 0;
     const payload = {
-      name: formName.trim(), description: formDesc.trim(), long_description: formLongDesc.trim(),
-      image_url: formImage, price_netto: parseFloat(formPriceNetto) || 0, vat_rate: formVat,
-      price_brutto: priceBrutto, price_per_unit: priceBrutto,
-      price_per_unit_on_site: formPriceBruttoOnSite ? parseFloat(formPriceBruttoOnSite) || null : null,
-      unit_label: formUnitLabel,
-      min_quantity: parseInt(formMinQty) || 1, icon: formIcon, category_slug: formCategorySlug,
-      allergens: formAllergens, dietary_tags: formDietaryTags,
+      name: formName.trim(),
+      description: formDesc.trim(),
+      longDescription: formLongDesc.trim(),
+      imageUrl: formImage,
+      priceNetto: parseFloat(formPriceNetto) || 0,
+      vatRate: formVat,
+      priceBrutto: priceBrutto,
+      pricePerUnit: priceBrutto,
+      pricePerUnitOnSite: formPriceBruttoOnSite ? parseFloat(formPriceBruttoOnSite) || null : null,
+      unitLabel: formUnitLabel,
+      minQuantity: parseInt(formMinQty) || 1,
+      icon: formIcon,
+      categorySlug: formCategorySlug,
+      allergens: formAllergens,
+      dietaryTags: formDietaryTags,
       contents: formContents.split("\n").map(s => s.trim()).filter(Boolean),
-      product_type: "simple",
+      productType: "simple",
     };
 
     const payloadWithIngredients = {
       ...payload,
-      dish_ingredients: formIngredients.map((di) => ({ ingredient_id: di.ingredientId, quantity: di.quantity })),
+      dishIngredients: formIngredients.map((di) => ({ ingredientId: di.ingredientId, quantity: di.quantity })),
     };
     try {
       if (editingId) {
@@ -509,7 +542,7 @@ const DishesTab = ({ dishes, ingredients, categories, reload }: { dishes: Dish[]
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex gap-4">
-              <ImageUpload image={formImage} onChange={setFormImage} />
+              <ImageUpload image={formImage} onChange={setFormImage} uploadKind="dish" />
               <div className="flex-1 space-y-2">
                 <div className="space-y-1">
                   <Label className="text-xs">Nazwa dania</Label>
@@ -699,28 +732,35 @@ const BundlesTab = ({ bundles, dishes, categories, reload }: { bundles: Bundle[]
     setSaving(true);
     const priceBrutto = parseFloat(formPriceBrutto) || 0;
     const bundlePayload = {
-      name: formName.trim(), description: formDesc.trim(), long_description: formLongDesc.trim(),
-      image_url: formImage, price_netto: parseFloat(formPriceNetto) || 0, vat_rate: formVat,
-      price_brutto: priceBrutto, base_price: parseFloat(formBasePrice) || priceBrutto,
-      min_quantity: parseInt(formMinQty) || 1, icon: formIcon, category_slug: formCategorySlug,
-      dietary_tags: formDietaryTags,
+      name: formName.trim(),
+      description: formDesc.trim(),
+      longDescription: formLongDesc.trim(),
+      imageUrl: formImage,
+      priceNetto: parseFloat(formPriceNetto) || 0,
+      vatRate: formVat,
+      priceBrutto: priceBrutto,
+      basePrice: parseFloat(formBasePrice) || priceBrutto,
+      minQuantity: parseInt(formMinQty) || 1,
+      icon: formIcon,
+      categorySlug: formCategorySlug,
+      dietaryTags: formDietaryTags,
     };
 
     const bundleVariantsPayload = formVariants.map((v, i) => ({
       name: v.name,
       description: v.description ?? "",
       price: v.price,
-      price_on_site: v.priceOnSite,
+      priceOnSite: v.priceOnSite,
       allergens: v.allergens ?? [],
-      dietary_tags: v.dietaryTags ?? [],
-      sort_order: i,
-      dish_id: v.dishId || null,
+      dietaryTags: v.dietaryTags ?? [],
+      sortOrder: i,
+      dishId: v.dishId || null,
     }));
     try {
       if (editingId) {
-        await api.updateBundle(editingId, { ...bundlePayload, bundle_variants: bundleVariantsPayload });
+        await api.updateBundle(editingId, { ...bundlePayload, bundleVariants: bundleVariantsPayload });
       } else {
-        await api.createBundle({ ...bundlePayload, bundle_variants: bundleVariantsPayload });
+        await api.createBundle({ ...bundlePayload, bundleVariants: bundleVariantsPayload });
       }
     } catch (err: unknown) {
       toast.error("Błąd: " + (err instanceof Error ? err.message : String(err)));
@@ -759,7 +799,7 @@ const BundlesTab = ({ bundles, dishes, categories, reload }: { bundles: Bundle[]
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex gap-4">
-              <ImageUpload image={formImage} onChange={setFormImage} />
+              <ImageUpload image={formImage} onChange={setFormImage} uploadKind="bundle" />
               <div className="flex-1 space-y-2">
                 <div className="space-y-1">
                   <Label className="text-xs">Nazwa</Label>
@@ -959,27 +999,34 @@ const ExtraBundlesTab = ({ extraBundles, extras, extrasCategories, reload }: { e
     setSaving(true);
     const priceBrutto = parseFloat(formPriceBrutto) || 0;
     const bundlePayload = {
-      name: formName.trim(), description: formDesc.trim(), long_description: formLongDesc.trim(),
-      image_url: formImage, price_netto: parseFloat(formPriceNetto) || 0, vat_rate: formVat,
-      price_brutto: priceBrutto, base_price: parseFloat(formBasePrice) || priceBrutto,
-      min_quantity: parseInt(formMinQty) || 1, icon: formIcon,
-      category: formCategory, extras_category_id: formExtrasCategoryId,
+      name: formName.trim(),
+      description: formDesc.trim(),
+      longDescription: formLongDesc.trim(),
+      imageUrl: formImage,
+      priceNetto: parseFloat(formPriceNetto) || 0,
+      vatRate: formVat,
+      priceBrutto: priceBrutto,
+      basePrice: parseFloat(formBasePrice) || priceBrutto,
+      minQuantity: parseInt(formMinQty) || 1,
+      icon: formIcon,
+      category: formCategory,
+      extrasCategoryId: formExtrasCategoryId,
     };
 
     const bundleVariantsPayload = formVariants.map((v, i) => ({
       name: v.name,
       description: v.description ?? "",
       price: v.price,
-      price_on_site: v.priceOnSite,
+      priceOnSite: v.priceOnSite,
       contents: v.contents ?? [],
-      sort_order: i,
-      extra_id: v.extraId || null,
+      sortOrder: i,
+      extraId: v.extraId || null,
     }));
     try {
       if (editingId) {
-        await api.updateExtraBundle(editingId, { ...bundlePayload, extra_bundle_variants: bundleVariantsPayload });
+        await api.updateExtraBundle(editingId, { ...bundlePayload, extraBundleVariants: bundleVariantsPayload });
       } else {
-        await api.createExtraBundle({ ...bundlePayload, extra_bundle_variants: bundleVariantsPayload });
+        await api.createExtraBundle({ ...bundlePayload, extraBundleVariants: bundleVariantsPayload });
       }
     } catch (err: unknown) {
       toast.error("Błąd: " + (err instanceof Error ? err.message : String(err)));
@@ -1018,7 +1065,7 @@ const ExtraBundlesTab = ({ extraBundles, extras, extrasCategories, reload }: { e
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex gap-4">
-              <ImageUpload image={formImage} onChange={setFormImage} />
+              <ImageUpload image={formImage} onChange={setFormImage} uploadKind="extraBundle" />
               <div className="flex-1 space-y-2">
                 <div className="space-y-1">
                   <Label className="text-xs">Nazwa</Label>
@@ -1272,11 +1319,15 @@ const ConfigSetsTab = ({ configSets, dishes, categories, reload }: { configSets:
     if (!formName.trim() || !formCategorySlug) { toast.error("Podaj nazwę i wybierz kategorię"); return; }
     setSaving(true);
     const setPayload = {
-      name: formName.trim(), description: formDesc.trim(), long_description: formLongDesc.trim(),
-      imageUrl: formImage, pricePerPerson: parseFloat(formPrice) || 0,
+      name: formName.trim(),
+      description: formDesc.trim(),
+      longDescription: formLongDesc.trim(),
+      imageUrl: formImage,
+      pricePerPerson: parseFloat(formPrice) || 0,
       pricePerPersonOnSite: formPriceOnSite ? parseFloat(formPriceOnSite) || null : null,
-      minPersons: parseInt(formMinPersons) || 10, icon: formIcon,
-   categorySlug: formCategorySlug,
+      minPersons: parseInt(formMinPersons) || 10,
+      icon: formIcon,
+      categorySlug: formCategorySlug,
       dietaryTags: formDietaryTags,
     };
 
@@ -1338,7 +1389,7 @@ const ConfigSetsTab = ({ configSets, dishes, categories, reload }: { configSets:
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex gap-4">
-              <ImageUpload image={formImage} onChange={setFormImage} />
+              <ImageUpload image={formImage} onChange={setFormImage} uploadKind="configurableSet" />
               <div className="flex-1 space-y-2">
                 <div className="space-y-1">
                   <Label className="text-xs">Nazwa</Label>
@@ -1548,16 +1599,16 @@ const SettingsDishesView = () => {
         name: String(i.name ?? ""),
         unit: (i.unit as UnitType) ?? "g",
         allergens: (i.allergens as string[]) ?? [],
-        pricePerUnit: Number(i.pricePerUnit ?? i.price_per_unit ?? 0),
+        pricePerUnit: Number(i.pricePerUnit ?? 0),
       })));
 
       const di = (Array.isArray(diData) ? diData : []) as Record<string, unknown>[];
       const dishIngredientsMap: Record<string, DishIngredient[]> = {};
       di.forEach((row) => {
-        const dishId = String(row.dishId ?? row.dish_id);
+        const dishId = String(row.dishId);
         if (!dishIngredientsMap[dishId]) dishIngredientsMap[dishId] = [];
         dishIngredientsMap[dishId].push({
-          ingredientId: String(row.ingredientId ?? row.ingredient_id),
+          ingredientId: String(row.ingredientId),
           quantity: Number(row.quantity ?? 0),
         });
       });
@@ -1567,89 +1618,89 @@ const SettingsDishesView = () => {
         id: String(d.id),
         name: String(d.name ?? ""),
         description: String(d.description ?? ""),
-        longDescription: String(d.longDescription ?? d.long_description ?? ""),
-        image: (d.imageUrl ?? d.image_url ?? null) as string | null,
-        priceNetto: Number(d.priceNetto ?? d.price_netto ?? 0),
-        vatRate: Number(d.vatRate ?? d.vat_rate ?? 8),
-        priceBrutto: Number(d.priceBrutto ?? d.price_brutto ?? 0),
-        pricePerUnit: Number(d.pricePerUnit ?? d.price_per_unit ?? d.priceBrutto ?? d.price_brutto ?? 0),
-        pricePerUnitOnSite: toNullableNumber(d.pricePerUnitOnSite ?? d.price_per_unit_on_site),
-        unitLabel: String(d.unitLabel ?? d.unit_label ?? "szt."),
-        minQuantity: Number(d.minQuantity ?? d.min_quantity ?? 1),
+        longDescription: String(d.longDescription ?? ""),
+        image: (d.imageUrl ?? null) as string | null,
+        priceNetto: Number(d.priceNetto ?? 0),
+        vatRate: Number(d.vatRate ?? 8),
+        priceBrutto: Number(d.priceBrutto ?? 0),
+        pricePerUnit: Number(d.pricePerUnit ?? d.priceBrutto ?? 0),
+        pricePerUnitOnSite: toNullableNumber(d.pricePerUnitOnSite),
+        unitLabel: String(d.unitLabel ?? "szt."),
+        minQuantity: Number(d.minQuantity ?? 1),
         icon: String(d.icon ?? "🍽️"),
-        categorySlug: (d.categorySlug ?? d.category_slug ?? null) as string | null,
+        categorySlug: (d.categorySlug ?? null) as string | null,
         contents: (d.contents as string[]) ?? [],
         allergens: (d.allergens as string[]) ?? [],
-        dietaryTags: (d.dietaryTags as string[]) ?? (d.dietary_tags as string[]) ?? [],
-        productType: String(d.productType ?? d.product_type ?? "dish"),
+        dietaryTags: (d.dietaryTags as string[]) ?? [],
+        productType: String(d.productType ?? "dish"),
         dishIngredients: dishIngredientsMap[String(d.id)] ?? [],
       })));
 
       const bundlesArr = (Array.isArray(bundleData) ? bundleData : []) as Record<string, unknown>[];
       setBundles(bundlesArr.map((b) => {
-        const vars = (b.bundleVariants ?? b.bundle_variants ?? []) as Array<Record<string, unknown>>;
-        const sorted = [...vars].sort((a, b) => (Number(a.sortOrder ?? a.sort_order ?? 0) - Number(b.sortOrder ?? b.sort_order ?? 0)));
+        const vars = (b.bundleVariants ?? []) as Array<Record<string, unknown>>;
+        const sorted = [...vars].sort((a, b) => (Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0)));
         return {
           id: String(b.id),
           name: String(b.name ?? ""),
           description: String(b.description ?? ""),
-          longDescription: String(b.longDescription ?? b.long_description ?? ""),
-          image: (b.imageUrl ?? b.image_url ?? null) as string | null,
-          priceNetto: Number(b.priceNetto ?? b.price_netto ?? 0),
-          vatRate: Number(b.vatRate ?? b.vat_rate ?? 8),
-          priceBrutto: Number(b.priceBrutto ?? b.price_brutto ?? 0),
-          basePrice: Number(b.basePrice ?? b.base_price ?? 0),
-          minQuantity: Number(b.minQuantity ?? b.min_quantity ?? 1),
+          longDescription: String(b.longDescription ?? ""),
+          image: (b.imageUrl ?? null) as string | null,
+          priceNetto: Number(b.priceNetto ?? 0),
+          vatRate: Number(b.vatRate ?? 8),
+          priceBrutto: Number(b.priceBrutto ?? 0),
+          basePrice: Number(b.basePrice ?? 0),
+          minQuantity: Number(b.minQuantity ?? 1),
           icon: String(b.icon ?? "🍽️"),
-          categorySlug: (b.categorySlug ?? b.category_slug ?? null) as string | null,
-          dietaryTags: (b.dietaryTags as string[]) ?? (b.dietary_tags as string[]) ?? [],
+          categorySlug: (b.categorySlug ?? null) as string | null,
+          dietaryTags: (b.dietaryTags as string[]) ?? [],
           variants: sorted.map((v) => ({
             id: String(v.id),
             name: String(v.name ?? ""),
             description: String(v.description ?? ""),
             price: Number(v.price ?? 0),
-            priceOnSite: toNullableNumber(v.priceOnSite ?? v.price_on_site),
+            priceOnSite: toNullableNumber(v.priceOnSite),
             allergens: (v.allergens as string[]) ?? [],
-            dietaryTags: (v.dietaryTags as string[]) ?? (v.dietary_tags as string[]) ?? [],
-            sortOrder: Number(v.sortOrder ?? v.sort_order ?? 0),
-            dishId: (v.dishId ?? v.dish_id ?? null) as string | null,
+            dietaryTags: (v.dietaryTags as string[]) ?? [],
+            sortOrder: Number(v.sortOrder ?? 0),
+            dishId: (v.dishId ?? null) as string | null,
           })),
         };
       }));
 
       const setsArr = (Array.isArray(setData) ? setData : []) as Record<string, unknown>[];
       setConfigSets(setsArr.map((s) => {
-        const grps = (s.configGroups ?? s.config_groups ?? []) as Array<Record<string, unknown>>;
-        const sortedGrps = [...grps].sort((a, b) => Number(a.sortOrder ?? a.sort_order ?? 0) - Number(b.sortOrder ?? b.sort_order ?? 0));
+        const grps = (s.configGroups ?? []) as Array<Record<string, unknown>>;
+        const sortedGrps = [...grps].sort((a, b) => Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0));
         return {
           id: String(s.id),
           name: String(s.name ?? ""),
           description: String(s.description ?? ""),
-          longDescription: String(s.longDescription ?? s.long_description ?? ""),
-          image: (s.imageUrl ?? s.image_url ?? null) as string | null,
-          pricePerPerson: Number(s.pricePerPerson ?? s.price_per_person ?? 0),
-          pricePerPersonOnSite: toNullableNumber(s.pricePerPersonOnSite ?? s.price_per_person_on_site),
-          minPersons: Number(s.minPersons ?? s.min_persons ?? 10),
+          longDescription: String(s.longDescription ?? ""),
+          image: (s.imageUrl ?? null) as string | null,
+          pricePerPerson: Number(s.pricePerPerson ?? 0),
+          pricePerPersonOnSite: toNullableNumber(s.pricePerPersonOnSite),
+          minPersons: Number(s.minPersons ?? 10),
           icon: String(s.icon ?? "🍽️"),
-          categorySlug: (s.categorySlug ?? s.category_slug ?? null) as string | null,
-          dietaryTags: (s.dietaryTags as string[]) ?? (s.dietary_tags as string[]) ?? [],
+          categorySlug: (s.categorySlug ?? null) as string | null,
+          dietaryTags: (s.dietaryTags as string[]) ?? [],
           groups: sortedGrps.map((g: Record<string, unknown>) => {
-            const opts = (g.options ?? g.config_group_options ?? []) as Array<Record<string, unknown>>;
-            const sortedOpts = [...opts].sort((a, b) => Number(a.sortOrder ?? a.sort_order ?? 0) - Number(b.sortOrder ?? b.sort_order ?? 0));
+            const opts = (g.options ?? []) as Array<Record<string, unknown>>;
+            const sortedOpts = [...opts].sort((a, b) => Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0));
             return {
               id: String(g.id),
               name: String(g.name ?? ""),
-              minSelections: Number(g.minSelections ?? g.min_selections ?? 1),
-              maxSelections: Number(g.maxSelections ?? g.max_selections ?? 3),
-              sortOrder: Number(g.sortOrder ?? g.sort_order ?? 0),
+              minSelections: Number(g.minSelections ?? 1),
+              maxSelections: Number(g.maxSelections ?? 3),
+              sortOrder: Number(g.sortOrder ?? 0),
               converter: Number(g.converter),
               options: sortedOpts.map((o: Record<string, unknown>) => ({
                 id: String(o.id),
                 name: String(o.name ?? ""),
                 allergens: (o.allergens as string[]) ?? [],
-                dietaryTags: (o.dietaryTags as string[]) ?? (o.dietary_tags as string[]) ?? [],
-                sortOrder: Number(o.sortOrder ?? o.sort_order ?? 0),
-                dishId: (o.dishId ?? o.dish_id ?? null) as string | null,
+                dietaryTags: (o.dietaryTags as string[]) ?? [],
+                sortOrder: Number(o.sortOrder ?? 0),
+                dishId: (o.dishId ?? null) as string | null,
                 converter: Number(o.converter),
               })),
             };
@@ -1662,50 +1713,50 @@ const SettingsDishesView = () => {
         id: String(e.id),
         name: String(e.name ?? ""),
         description: String(e.description ?? ""),
-        longDescription: String(e.longDescription ?? e.long_description ?? ""),
-        image: (e.imageUrl ?? e.image_url ?? null) as string | null,
+        longDescription: String(e.longDescription ?? ""),
+        image: (e.imageUrl ?? null) as string | null,
         category: String(e.category ?? ""),
-        extrasCategoryId: (e.extrasCategoryId ?? e.extras_category_id ?? null) as string | null,
+        extrasCategoryId: (e.extrasCategoryId ?? null) as string | null,
         price: Number(e.price ?? 0),
-        priceNetto: Number(e.priceNetto ?? e.price_netto ?? 0),
-        vatRate: Number(e.vatRate ?? e.vat_rate ?? 23),
-        priceBrutto: Number(e.priceBrutto ?? e.price_brutto ?? e.price ?? 0),
-        priceOnSite: toNullableNumber(e.priceOnSite ?? e.price_on_site),
-        unitLabel: String(e.unitLabel ?? e.unit_label ?? "szt."),
-        priceLabel: String(e.priceLabel ?? e.price_label ?? ""),
-        requiresPersonCount: Boolean(e.requiresPersonCount ?? e.requires_person_count ?? false),
+        priceNetto: Number(e.priceNetto ?? 0),
+        vatRate: Number(e.vatRate ?? 23),
+        priceBrutto: Number(e.priceBrutto ?? e.price ?? 0),
+        priceOnSite: toNullableNumber(e.priceOnSite),
+        unitLabel: String(e.unitLabel ?? "szt."),
+        priceLabel: String(e.priceLabel ?? ""),
+        requiresPersonCount: Boolean(e.requiresPersonCount ?? false),
         duration: (e.duration ?? null) as string | null,
         contents: (e.contents as string[]) ?? [],
-        foodCost: Number(e.foodCost ?? e.food_cost ?? 0),
+        foodCost: Number(e.foodCost ?? 0),
       })));
 
       const extraBundlesArr = (Array.isArray(extraBundleData) ? extraBundleData : []) as Record<string, unknown>[];
       setExtraBundles(extraBundlesArr.map((b) => {
-        const vars = (b.extraBundleVariants ?? b.extra_bundle_variants ?? []) as Array<Record<string, unknown>>;
-        const sorted = [...vars].sort((a, b) => (Number(a.sortOrder ?? a.sort_order ?? 0) - Number(b.sortOrder ?? b.sort_order ?? 0)));
+        const vars = (b.extraBundleVariants ?? []) as Array<Record<string, unknown>>;
+        const sorted = [...vars].sort((a, b) => (Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0)));
         return {
           id: String(b.id),
           name: String(b.name ?? ""),
           description: String(b.description ?? ""),
-          longDescription: String(b.longDescription ?? b.long_description ?? ""),
-          image: (b.imageUrl ?? b.image_url ?? null) as string | null,
-          priceNetto: Number(b.priceNetto ?? b.price_netto ?? 0),
-          vatRate: Number(b.vatRate ?? b.vat_rate ?? 23),
-          priceBrutto: Number(b.priceBrutto ?? b.price_brutto ?? 0),
-          basePrice: Number(b.basePrice ?? b.base_price ?? 0),
-          minQuantity: Number(b.minQuantity ?? b.min_quantity ?? 1),
+          longDescription: String(b.longDescription ?? ""),
+          image: (b.imageUrl ?? null) as string | null,
+          priceNetto: Number(b.priceNetto ?? 0),
+          vatRate: Number(b.vatRate ?? 23),
+          priceBrutto: Number(b.priceBrutto ?? 0),
+          basePrice: Number(b.basePrice ?? 0),
+          minQuantity: Number(b.minQuantity ?? 1),
           icon: String(b.icon ?? "✨"),
           category: String(b.category ?? "dodatki"),
-          extrasCategoryId: (b.extrasCategoryId ?? b.extras_category_id ?? null) as string | null,
+          extrasCategoryId: (b.extrasCategoryId ?? null) as string | null,
           variants: sorted.map((v) => ({
             id: String(v.id),
             name: String(v.name ?? ""),
             description: String(v.description ?? ""),
             price: Number(v.price ?? 0),
-            priceOnSite: toNullableNumber(v.priceOnSite ?? v.price_on_site),
+            priceOnSite: toNullableNumber(v.priceOnSite),
             contents: (v.contents as string[]) ?? [],
-            sortOrder: Number(v.sortOrder ?? v.sort_order ?? 0),
-            extraId: (v.extraId ?? v.extra_id ?? null) as string | null,
+            sortOrder: Number(v.sortOrder ?? 0),
+            extraId: (v.extraId ?? null) as string | null,
           })),
         };
       }));

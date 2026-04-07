@@ -25,12 +25,12 @@ const SettingsDeliveryView = () => {
     getCompanySettings()
       .then((data: Record<string, unknown>) => {
         if (data.id) setSettingsId(String(data.id));
-        setCompanyAddressFull(String(data.companyAddressFull ?? data.company_address_full ?? ""));
-        setCompanyLat(data.companyLat != null ? Number(data.companyLat) : data.company_lat != null ? Number(data.company_lat) : null);
-        setCompanyLng(data.companyLng != null ? Number(data.companyLng) : data.company_lng != null ? Number(data.company_lng) : null);
-        setPricePerKm(Number(data.deliveryPricePerKm ?? data.delivery_price_per_km ?? 3) || 3);
-        setMaxDeliveryKm(data.maxDeliveryKm != null ? Number(data.maxDeliveryKm) : data.max_delivery_km != null ? Number(data.max_delivery_km) : null);
-        setFreeDeliveryAbove(data.freeDeliveryAboveKm != null ? Number(data.freeDeliveryAboveKm) : data.free_delivery_above_km != null ? Number(data.free_delivery_above_km) : null);
+        setCompanyAddressFull(String(data.companyAddressFull ?? ""));
+        setCompanyLat(data.companyLat != null ? Number(data.companyLat) : null);
+        setCompanyLng(data.companyLng != null ? Number(data.companyLng) : null);
+        setPricePerKm(Number(data.deliveryPricePerKm ?? 3) || 3);
+        setMaxDeliveryKm(data.maxDeliveryKm != null ? Number(data.maxDeliveryKm) : null);
+        setFreeDeliveryAbove(data.freeDeliveryAboveKm != null ? Number(data.freeDeliveryAboveKm) : null);
       })
       .catch(() => {})
       .finally(() => setLoading(false));

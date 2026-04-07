@@ -25,7 +25,7 @@ const ReportsView = () => {
 
   useEffect(() => {
     const fetchData = async () => {
-      let data: Array<{ amount: number; createdAt?: string; created_at?: string; status?: string }> = [];
+      let data: Array<{ amount: number; createdAt?: string; status?: string }> = [];
       try {
         data = (await getAdminOrders()) as typeof data;
       } catch (e) {
@@ -36,7 +36,7 @@ const ReportsView = () => {
       const filtered = data.filter((o) => o.status !== "Anulowane");
       const map: Record<string, { orders: number; revenue: number }> = {};
       filtered.forEach((o) => {
-        const raw = o.createdAt ?? (o as Record<string, unknown>).created_at;
+        const raw = o.createdAt;
         const d = new Date((raw as string) ?? "");
         const key = `${d.getFullYear()}-${d.getMonth()}`;
         if (!map[key]) map[key] = { orders: 0, revenue: 0 };

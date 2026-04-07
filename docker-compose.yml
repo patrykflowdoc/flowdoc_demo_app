@@ -42,6 +42,7 @@ services:
     volumes:
       - ./backend:/app
       - /app/node_modules  # zachowaj node_modules z obrazu (zawiera dotenv itd.)
+      - uploads_data:/app/uploads
     networks:
       - szczypta-smaku
     depends_on:
@@ -84,6 +85,7 @@ volumes:
   caddy_config:
   caddy_data:
   postgres_data:
+  uploads_data:
 networks:
   szczypta-smaku:
     driver: bridge

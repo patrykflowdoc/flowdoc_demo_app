@@ -74,7 +74,7 @@ export function ExtrasStep({
     }
   }, [extrasCategories, activeCategory]);
 
-  // Group extras/packaging/waiter by their extras_category_id
+  // Group extras/packaging/waiter by extrasCategoryId
   const extrasByCategory = useMemo(() => {
     const map: Record<string, ExtraItem[]> = {};
     for (const item of extraItems) {

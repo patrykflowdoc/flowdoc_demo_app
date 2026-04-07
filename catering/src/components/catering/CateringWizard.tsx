@@ -34,7 +34,7 @@ export function CateringWizard() {
   const categories = (categoriesRaw ?? []) as Category[];
   const eventTypes = (eventTypesRaw ?? []) as EventType[];
   const extrasCategories = (extrasCategoriesRaw ?? []) as ExtrasCategory[];
-  const eventCategoryMappings = (eventCategoryMappingsRaw ?? []) as { event_type_id: string; category_id: string }[];
+  const eventCategoryMappings = (eventCategoryMappingsRaw ?? []) as { eventTypeId: string; categoryId: string }[];
   const eventExtrasCategoryMappings = (eventExtrasCategoryMappingsRaw ?? []) as {
     eventTypeId: string;
     extrasCategoryId: string;
@@ -71,8 +71,8 @@ export function CateringWizard() {
   const filteredCategories = useMemo(() => {
     if (!order.eventType?.id) return categories;
     const mappedCategoryIds = eventCategoryMappings
-      .filter((m) => m.event_type_id === order.eventType.id)
-      .map((m) => m.category_id);
+      .filter((m) => m.eventTypeId === order.eventType.id)
+      .map((m) => m.categoryId);
     // If no mappings exist for this event type, show all categories
     if (mappedCategoryIds.length === 0) return categories;
     return categories.filter((c) => c.dbId && mappedCategoryIds.includes(c.dbId));

@@ -4,10 +4,18 @@
  */
 import { Router } from "express";
 import { z } from "zod";
+import multer from "multer";
 import { prisma } from "../config/db.js";
 import { requireAuth } from "../middleware/auth.js";
 import { requireCsrf } from "../middleware/csrf.js";
 import { createOrderFromPayload } from "../services/createOrderFromPayload.js";
+import {
+  createImageMulter,
+  deleteStoredUploadIfAppOwned,
+  getUploadSubdirByKind,
+  normalizeUploadedImage,
+  toUploadUrl,
+} from "../lib/uploads.js";
 
 const router = Router();
 router.use(requireAuth);
@@ -57,12 +65,11 @@ const eventExtrasCategoryMappingSchema = z.object({
   extrasCategoryId: z.string().min(1),
 });
 
-function pickWithSnakeFallback(obj, keys) {
+/** Pick only keys present on obj (camelCase contract — no alias keys). */
+function pickDefined(obj, keys) {
   const out = {};
   for (const key of keys) {
-    const snake = key.replace(/([A-Z])/g, "_$1").toLowerCase();
-    const v = obj[key] ?? obj[snake];
-    if (v !== undefined) out[key] = v;
+    if (obj[key] !== undefined) out[key] = obj[key];
   }
   return out;
 }
@@ -88,12 +95,67 @@ function decimalToNum(d) {
   return toNum(d.toString());
 }
 
+function normalizeCompanyAssetUrl(value) {
+  if (value === undefined) return undefined;
+  if (value == null || value === "") return null;
+  if (typeof value !== "string") {
+    throw new Error("Nieprawidlowy format URL obrazu.");
+  }
+  if (!value.startsWith("/uploads/company/")) {
+    throw new Error("Dozwolone sa tylko obrazy przeslane do /uploads/company/.");
+  }
+  return value;
+}
+
+async function deleteImageIfReplaced(previousUrl, nextUrl) {
+  if (!previousUrl || previousUrl === nextUrl) return;
+  await deleteStoredUploadIfAppOwned(previousUrl);
+}
+
+function parseUploadKind(rawKind) {
+  if (rawKind === "company") return "company";
+  if (rawKind === "dish") return "dish";
+  if (rawKind === "bundle") return "bundle";
+  if (rawKind === "configurableSet") return "configurableSet";
+  if (rawKind === "extra") return "extra";
+  if (rawKind === "extraBundle") return "extraBundle";
+  return null;
+}
+
+router.post("/uploads/:kind", requireCsrf, async (req, res) => {
+  const kind = parseUploadKind(req.params.kind);
+  if (!kind) return res.status(400).json({ error: "Nieznany typ uploadu." });
+  const subdir = getUploadSubdirByKind(kind);
+  if (!subdir) return res.status(400).json({ error: "Nieznany katalog uploadu." });
+  const upload = createImageMulter(subdir).single("file");
+
+  upload(req, res, async (err) => {
+    if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
+      return res.status(400).json({ error: "Plik jest za duzy. Maksymalny rozmiar to 10 MB." });
+    }
+    if (err) {
+      return res.status(400).json({ error: err.message || "Nieudany upload pliku." });
+    }
+    if (!req.file) {
+      return res.status(400).json({ error: "Brak pliku." });
+    }
+    try {
+      const normalizedPath = await normalizeUploadedImage(req.file.path, subdir);
+      return res.status(201).json({ url: toUploadUrl(normalizedPath) });
+    } catch {
+      return res.status(400).json({ error: "Nie udalo sie przetworzyc obrazu." });
+    }
+  });
+});
+
 // ─── Company settings ─────────────────────────────────────────────────
 /** PATCH /api/admin/company-settings - upsert single row */
 router.patch("/company-settings", requireCsrf, async (req, res) => {
   try {
     const body = req.body ?? {};
     const existing = await prisma.companySetting.findFirst();
+    const logoUrl = normalizeCompanyAssetUrl(body.logoUrl);
+    const faviconUrl = normalizeCompanyAssetUrl(body.faviconUrl);
     const payload = {
       companyName: body.companyName ?? existing?.companyName ?? "",
       nip: body.nip ?? existing?.nip ?? "",
@@ -101,8 +163,8 @@ router.patch("/company-settings", requireCsrf, async (req, res) => {
       phone: body.phone ?? existing?.phone ?? "",
       address: body.address ?? existing?.address ?? "",
       bankAccount: body.bankAccount ?? existing?.bankAccount ?? "",
-      logoUrl: body.logoUrl ?? existing?.logoUrl ?? null,
-      faviconUrl: body.faviconUrl  ?? existing?.faviconUrl ?? null,
+      logoUrl: logoUrl === undefined ? existing?.logoUrl ?? null : logoUrl,
+      faviconUrl: faviconUrl === undefined ? existing?.faviconUrl ?? null : faviconUrl,
       privacyPolicyUrl: body.privacyPolicyUrl  ?? existing?.privacyPolicyUrl ?? null,
       minOrderValue: body.minOrderValue  ?? existing?.minOrderValue ?? 200,
       minLeadDays: body.minLeadDays  ?? existing?.minLeadDays ?? 3,
@@ -122,8 +184,15 @@ router.patch("/company-settings", requireCsrf, async (req, res) => {
     } else {
       row = await prisma.companySetting.create({ data: payload });
     }
+    await Promise.all([
+      deleteImageIfReplaced(existing?.logoUrl, row.logoUrl),
+      deleteImageIfReplaced(existing?.faviconUrl, row.faviconUrl),
+    ]);
     res.json(row);
   } catch (err) {
+    if (err instanceof Error && /Dozwolone|Nieprawidlowy/.test(err.message)) {
+      return res.status(400).json({ error: err.message });
+    }
     console.error("PATCH admin/company-settings:", err);
     res.status(500).json({ error: String(err.message) });
   }
@@ -163,19 +232,19 @@ router.get("/clients", async (_req, res) => {
 router.post("/clients", requireCsrf, async (req, res) => {
   const b = req.body ?? {};
   const data = {
-    firstName: b.firstName ?? b.first_name ?? "",
-    lastName: b.lastName ?? b.last_name ?? "",
+    firstName: b.firstName ?? "",
+    lastName: b.lastName ?? "",
     email: b.email ?? "",
     phone: b.phone ?? "",
-    phoneAlt: b.phoneAlt ?? b.phone_alt ?? null,
+    phoneAlt: b.phoneAlt ?? null,
     address: b.address ?? null,
     city: b.city ?? null,
-    postalCode: b.postalCode ?? b.postal_code ?? null,
-    companyName: b.companyName ?? b.company_name ?? null,
+    postalCode: b.postalCode ?? null,
+    companyName: b.companyName ?? null,
     nip: b.nip ?? null,
-    companyAddress: b.companyAddress ?? b.company_address ?? null,
-    companyCity: b.companyCity ?? b.company_city ?? null,
-    companyPostalCode: b.companyPostalCode ?? b.company_postal_code ?? null,
+    companyAddress: b.companyAddress ?? null,
+    companyCity: b.companyCity ?? null,
+    companyPostalCode: b.companyPostalCode ?? null,
     notes: b.notes ?? null,
   };
   if (b.id) data.id = b.id;
@@ -408,40 +477,40 @@ router.get("/catalog", async (_req, res) => {
     dishes: dishes.map((d) => ({
       id: d.id,
       name: d.name,
-      unit_label: d.unitLabel,
-      price_per_unit: decimalToNum(d.pricePerUnit),
-      price_brutto: decimalToNum(d.priceBrutto),
+      unitLabel: d.unitLabel,
+      pricePerUnit: decimalToNum(d.pricePerUnit),
+      priceBrutto: decimalToNum(d.priceBrutto),
     })),
     bundles: bundles.map((b) => ({
       id: b.id,
       name: b.name,
-      base_price: decimalToNum(b.basePrice),
+      basePrice: decimalToNum(b.basePrice),
       converter: toNum(b.converter) ?? 1,
-      bundle_variants: (b.bundleVariants ?? []).map((v) => ({
+      bundleVariants: (b.bundleVariants ?? []).map((v) => ({
         id: v.id,
         name: v.name,
         price: decimalToNum(v.price),
-        sort_order: v.sortOrder,
-        dish_id: v.dishId ?? null,
+        sortOrder: v.sortOrder,
+        dishId: v.dishId ?? null,
       })),
     })),
-    configurable_sets: sets.map((s) => ({
+    configurableSets: sets.map((s) => ({
       id: s.id,
       name: s.name,
-      price_per_person: decimalToNum(s.pricePerPerson),
-      config_groups: (s.configGroups ?? []).map((g) => ({
+      pricePerPerson: decimalToNum(s.pricePerPerson),
+      configGroups: (s.configGroups ?? []).map((g) => ({
         id: g.id,
         name: g.name,
-        min_selections: g.minSelections,
-        max_selections: g.maxSelections,
-        sort_order: g.sortOrder,
+        minSelections: g.minSelections,
+        maxSelections: g.maxSelections,
+        sortOrder: g.sortOrder,
         converter: toNum(g.converter) ?? 1,
-        config_group_options: (g.options ?? []).map((o) => ({
+        options: (g.options ?? []).map((o) => ({
           id: o.id,
           name: o.name,
-          sort_order: o.sortOrder,
+          sortOrder: o.sortOrder,
           converter: toNum(o.converter) ?? 1,
-          dish_id: o.dishId ?? null,
+          dishId: o.dishId ?? null,
         })),
       })),
     })),
@@ -449,7 +518,7 @@ router.get("/catalog", async (_req, res) => {
       id: e.id,
       name: e.name,
       price: decimalToNum(e.price),
-      unit_label: e.unitLabel,
+      unitLabel: e.unitLabel,
       category: e.category,
     })),
   });
@@ -474,7 +543,7 @@ router.post("/product-categories", requireCsrf, async (req, res) => {
       description: b.description ?? "",
       icon: b.icon ?? "Salad",
       slug: slug || "category",
-      sortOrder: b.sortOrder ?? b.sort_order ?? 0,
+      sortOrder: b.sortOrder ?? 0,
     },
   });
   res.status(201).json(created);
@@ -552,7 +621,7 @@ router.delete("/event-types/:id", requireCsrf, async (req, res) => {
 /** GET /api/admin/event-category-mappings */
 router.get("/event-category-mappings", async (_req, res) => {
   const rows = await prisma.eventCategoryMapping.findMany();
-  res.json(rows.map((r) => ({ id: r.id, event_type_id: r.eventTypeId, category_id: r.categoryId })));
+  res.json(rows.map((r) => ({ id: r.id, eventTypeId: r.eventTypeId, categoryId: r.categoryId })));
 });
 
 /** POST /api/admin/event-category-mappings */
@@ -560,8 +629,8 @@ router.post("/event-category-mappings", requireCsrf, async (req, res) => {
   const b = req.body ?? {};
   const created = await prisma.eventCategoryMapping.create({
     data: {
-      eventTypeId: b.eventTypeId ?? b.event_type_id,
-      categoryId: b.categoryId ?? b.category_id,
+      eventTypeId: b.eventTypeId,
+      categoryId: b.categoryId,
     },
   });
   res.status(201).json(created);
@@ -580,10 +649,10 @@ router.patch("/event-category-mappings/:id", requireCsrf, async (req, res) => {
   res.status(200).json(updated);
 });
 
-/** DELETE /api/admin/event-category-mappings - query: event_type_id, category_id */
+/** DELETE /api/admin/event-category-mappings - query: eventTypeId, categoryId */
 router.delete("/event-category-mappings", requireCsrf, async (req, res) => {
-  const eventTypeId = req.query.event_type_id;
-  const categoryId = req.query.category_id;
+  const eventTypeId = req.query.eventTypeId;
+  const categoryId = req.query.categoryId;
   await prisma.eventCategoryMapping.deleteMany({
     where: { eventTypeId, categoryId },
   });
@@ -654,7 +723,7 @@ router.post("/extras-categories", requireCsrf, async (req, res) => {
       icon: b.icon ?? "Sparkles",
       slug: slug || "extras",
       sortOrder: b.sortOrder ?? 0,
-      isRequired: b.isRequired ?? b.is_required ?? false,
+      isRequired: b.isRequired ?? false,
     },
   });
   res.status(201).json(created);
@@ -697,11 +766,22 @@ router.post("/extras", requireCsrf, async (req, res) => {
     data: {
       name: b.name ?? "",
       description: b.description ?? "",
+      longDescription: b.longDescription ?? "",
+      imageUrl: b.imageUrl ?? null,
       category: b.category ?? "dodatki",
-      extrasCategoryId: b.extrasCategoryId ?? b.extras_category_id ?? null,
+      extrasCategoryId: b.extrasCategoryId ?? null,
       price: b.price ?? 0,
-      unitLabel: b.unitLabel ?? b.unit_label ?? "szt.",
-      sortOrder: b.sortOrder ?? b.sort_order ?? 0,
+      priceNetto: b.priceNetto ?? null,
+      vatRate: b.vatRate ?? 23,
+      priceBrutto: b.priceBrutto ?? null,
+      priceOnSite: b.priceOnSite ?? null,
+      unitLabel: b.unitLabel ?? "szt.",
+      priceLabel: b.priceLabel ?? "",
+      requiresPersonCount: b.requiresPersonCount ?? false,
+      duration: b.duration ?? null,
+      contents: Array.isArray(b.contents) ? b.contents : [],
+      foodCost: b.foodCost ?? null,
+      sortOrder: b.sortOrder ?? 0,
     },
   });
   res.status(201).json(created);
@@ -709,22 +789,62 @@ router.post("/extras", requireCsrf, async (req, res) => {
 
 /** PATCH /api/admin/extras/:id */
 router.patch("/extras/:id", requireCsrf, async (req, res) => {
+  const existing = await prisma.extra.findUnique({
+    where: { id: req.params.id },
+    select: { imageUrl: true },
+  });
   const data = {};
   const b = req.body ?? {};
-  ["name", "description", "category", "extrasCategoryId", "price", "unitLabel", "sortOrder"].forEach((key) => {
-    const v = b[key] ?? b[key.replace(/([A-Z])/g, "_$1").toLowerCase()];
-    if (v !== undefined) data[key] = key === "price" ? Number(v) : key === "sortOrder" ? Number(v) : v;
+  const parseBoolean = (value) =>
+    typeof value === "string" ? value.toLowerCase() === "true" : Boolean(value);
+  const numberOrNullKeys = ["price", "priceNetto", "priceBrutto", "priceOnSite", "foodCost"];
+  const numberKeys = ["sortOrder", "vatRate"];
+  const passthroughKeys = [
+    "name",
+    "description",
+    "longDescription",
+    "imageUrl",
+    "category",
+    "extrasCategoryId",
+    "unitLabel",
+    "priceLabel",
+    "duration",
+  ];
+
+  numberOrNullKeys.forEach((key) => {
+    if (b[key] !== undefined) data[key] = b[key] == null ? null : Number(b[key]);
   });
+  numberKeys.forEach((key) => {
+    if (b[key] !== undefined) data[key] = Number(b[key]);
+  });
+  if (b.requiresPersonCount !== undefined) {
+    data.requiresPersonCount = parseBoolean(b.requiresPersonCount);
+  }
+  if (b.contents !== undefined) {
+    data.contents = Array.isArray(b.contents) ? b.contents : [];
+  }
+  passthroughKeys.forEach((key) => {
+    if (b[key] !== undefined) data[key] = b[key];
+  });
+
   const updated = await prisma.extra.update({
     where: { id: req.params.id },
     data,
   });
+  if (Object.prototype.hasOwnProperty.call(data, "imageUrl")) {
+    await deleteImageIfReplaced(existing?.imageUrl, updated.imageUrl);
+  }
   res.json(updated);
 });
 
 /** DELETE /api/admin/extras/:id */
 router.delete("/extras/:id", requireCsrf, async (req, res) => {
+  const existing = await prisma.extra.findUnique({
+    where: { id: req.params.id },
+    select: { imageUrl: true },
+  });
   await prisma.extra.delete({ where: { id: req.params.id } });
+  await deleteStoredUploadIfAppOwned(existing?.imageUrl);
   res.status(204).send();
 });
 
@@ -742,32 +862,32 @@ router.post("/extra-bundles", requireCsrf, async (req, res) => {
   const bundlePayload = {
     name: b.name ?? "",
     description: b.description ?? "",
-    longDescription: b.long_description ?? b.longDescription ?? "",
-    imageUrl: b.image_url ?? b.imageUrl ?? null,
+    longDescription: b.longDescription ?? "",
+    imageUrl: b.imageUrl ?? null,
     category: b.category ?? "dodatki",
-    extrasCategoryId: b.extras_category_id ?? b.extrasCategoryId ?? null,
-    priceNetto: Number(b.price_netto ?? b.priceNetto ?? 0),
-    vatRate: Number(b.vat_rate ?? b.vatRate ?? 23),
-    priceBrutto: Number(b.price_brutto ?? b.priceBrutto ?? 0),
-    basePrice: Number(b.base_price ?? b.basePrice ?? 0),
-    minQuantity: Number(b.min_quantity ?? b.minQuantity ?? 1),
+    extrasCategoryId: b.extrasCategoryId ?? null,
+    priceNetto: Number(b.priceNetto ?? 0),
+    vatRate: Number(b.vatRate ?? 23),
+    priceBrutto: Number(b.priceBrutto ?? 0),
+    basePrice: Number(b.basePrice ?? 0),
+    minQuantity: Number(b.minQuantity ?? 1),
     icon: b.icon ?? "✨",
   };
   const created = await prisma.extraBundle.create({
     data: bundlePayload,
     include: { extraBundleVariants: true },
   });
-  if (Array.isArray(b.extra_bundle_variants) && b.extra_bundle_variants.length > 0) {
+  if (Array.isArray(b.extraBundleVariants) && b.extraBundleVariants.length > 0) {
     await prisma.extraBundleVariant.createMany({
-      data: b.extra_bundle_variants.map((v, i) => ({
+      data: b.extraBundleVariants.map((v, i) => ({
         bundleId: created.id,
         name: v.name ?? "",
         description: v.description ?? "",
         price: Number(v.price ?? 0),
-        priceOnSite: v.price_on_site != null ? Number(v.price_on_site) : null,
-        extraId: v.extra_id ?? v.extraId ?? null,
+        priceOnSite: v.priceOnSite != null ? Number(v.priceOnSite) : null,
+        extraId: v.extraId ?? null,
         contents: Array.isArray(v.contents) ? v.contents : [],
-        sortOrder: v.sort_order ?? v.sortOrder ?? i,
+        sortOrder: v.sortOrder ?? i,
       })),
     });
   }
@@ -780,44 +900,48 @@ router.post("/extra-bundles", requireCsrf, async (req, res) => {
 
 router.patch("/extra-bundles/:id", requireCsrf, async (req, res) => {
   const id = req.params.id;
+  const existing = await prisma.extraBundle.findUnique({
+    where: { id },
+    select: { imageUrl: true },
+  });
   const b = req.body ?? {};
   const data = {};
   if (b.name !== undefined) data.name = String(b.name);
   if (b.description !== undefined) data.description = String(b.description);
-  if (b.long_description !== undefined || b.longDescription !== undefined)
-    data.longDescription = String(b.long_description ?? b.longDescription);
-  if (b.image_url !== undefined || b.imageUrl !== undefined)
-    data.imageUrl = b.image_url ?? b.imageUrl ?? null;
+  if (b.longDescription !== undefined)
+    data.longDescription = String(b.longDescription);
+  if (b.imageUrl !== undefined)
+    data.imageUrl = b.imageUrl ?? null;
   if (b.category !== undefined) data.category = String(b.category);
-  if (b.extras_category_id !== undefined || b.extrasCategoryId !== undefined)
-    data.extrasCategoryId = b.extras_category_id ?? b.extrasCategoryId ?? null;
-  if (b.price_netto !== undefined || b.priceNetto !== undefined)
-    data.priceNetto = Number(b.price_netto ?? b.priceNetto);
-  if (b.vat_rate !== undefined || b.vatRate !== undefined)
-    data.vatRate = Number(b.vat_rate ?? b.vatRate);
-  if (b.price_brutto !== undefined || b.priceBrutto !== undefined)
-    data.priceBrutto = Number(b.price_brutto ?? b.priceBrutto);
-  if (b.base_price !== undefined || b.basePrice !== undefined)
-    data.basePrice = Number(b.base_price ?? b.basePrice);
-  if (b.min_quantity !== undefined || b.minQuantity !== undefined)
-    data.minQuantity = Number(b.min_quantity ?? b.minQuantity);
+  if (b.extrasCategoryId !== undefined)
+    data.extrasCategoryId = b.extrasCategoryId ?? null;
+  if (b.priceNetto !== undefined)
+    data.priceNetto = Number(b.priceNetto);
+  if (b.vatRate !== undefined)
+    data.vatRate = Number(b.vatRate);
+  if (b.priceBrutto !== undefined)
+    data.priceBrutto = Number(b.priceBrutto);
+  if (b.basePrice !== undefined)
+    data.basePrice = Number(b.basePrice);
+  if (b.minQuantity !== undefined)
+    data.minQuantity = Number(b.minQuantity);
   if (b.icon !== undefined) data.icon = String(b.icon);
 
   if (Object.keys(data).length > 0) await prisma.extraBundle.update({ where: { id }, data });
 
-  if (Array.isArray(b.extra_bundle_variants)) {
+  if (Array.isArray(b.extraBundleVariants)) {
     await prisma.extraBundleVariant.deleteMany({ where: { bundleId: id } });
-    if (b.extra_bundle_variants.length > 0) {
+    if (b.extraBundleVariants.length > 0) {
       await prisma.extraBundleVariant.createMany({
-        data: b.extra_bundle_variants.map((v, i) => ({
+        data: b.extraBundleVariants.map((v, i) => ({
           bundleId: id,
           name: v.name ?? "",
           description: v.description ?? "",
           price: Number(v.price ?? 0),
-          priceOnSite: v.price_on_site != null ? Number(v.price_on_site) : null,
-          extraId: v.extra_id ?? v.extraId ?? null,
+          priceOnSite: v.priceOnSite != null ? Number(v.priceOnSite) : null,
+          extraId: v.extraId ?? null,
           contents: Array.isArray(v.contents) ? v.contents : [],
-          sortOrder: v.sort_order ?? v.sortOrder ?? i,
+          sortOrder: v.sortOrder ?? i,
         })),
       });
     }
@@ -826,12 +950,20 @@ router.patch("/extra-bundles/:id", requireCsrf, async (req, res) => {
     where: { id },
     include: { extraBundleVariants: { orderBy: { sortOrder: "asc" } } },
   });
+  if (Object.prototype.hasOwnProperty.call(data, "imageUrl")) {
+    await deleteImageIfReplaced(existing?.imageUrl, updated?.imageUrl ?? null);
+  }
   res.json(updated);
 });
 
 router.delete("/extra-bundles/:id", requireCsrf, async (req, res) => {
+  const existing = await prisma.extraBundle.findUnique({
+    where: { id: req.params.id },
+    select: { imageUrl: true },
+  });
   await prisma.extraBundleVariant.deleteMany({ where: { bundleId: req.params.id } });
   await prisma.extraBundle.delete({ where: { id: req.params.id } });
+  await deleteStoredUploadIfAppOwned(existing?.imageUrl);
   res.status(204).send();
 });
 
@@ -852,12 +984,12 @@ router.post("/delivery-zones", requireCsrf, async (req, res) => {
       name: b.name ?? "",
       description: b.description ?? "",
       cities: Array.isArray(b.cities) ? b.cities : [],
-      postalCodes: Array.isArray(b.postalCodes ?? b.postal_codes) ? (b.postalCodes ?? b.postal_codes) : [],
+      postalCodes: Array.isArray(b.postalCodes) ? b.postalCodes : [],
       price: b.price ?? 0,
-      freeDeliveryAbove: b.freeDeliveryAbove ?? b.free_delivery_above ?? null,
-      minOrderValue: b.minOrderValue ?? b.min_order_value ?? null,
-      isActive: b.isActive ?? b.is_active ?? true,
-      sortOrder: b.sortOrder ?? b.sort_order ?? 0,
+      freeDeliveryAbove: b.freeDeliveryAbove ?? null,
+      minOrderValue: b.minOrderValue ?? null,
+      isActive: b.isActive ?? true,
+      sortOrder: b.sortOrder ?? 0,
     },
   });
   res.status(201).json(created);
@@ -895,7 +1027,7 @@ router.get("/blocked-dates", async (_req, res) => {
   const rows = await prisma.blockedDate.findMany({
     orderBy: { blockedDate: "asc" },
   });
-  res.json(rows.map((r) => ({ id: r.id, blocked_date: r.blockedDate, reason: r.reason })));
+  res.json(rows.map((r) => ({ id: r.id, blockedDate: r.blockedDate, reason: r.reason })));
 });
 
 /** POST /api/admin/blocked-dates */
@@ -903,7 +1035,7 @@ router.post("/blocked-dates", requireCsrf, async (req, res) => {
   const b = req.body ?? {};
   const created = await prisma.blockedDate.create({
     data: {
-      blockedDate: new Date(b.blockedDate ?? b.blocked_date ?? Date.now()),
+      blockedDate: new Date(b.blockedDate ?? Date.now()),
       reason: b.reason ?? null,
     },
   });
@@ -973,7 +1105,7 @@ router.post("/ingredients", requireCsrf, async (req, res) => {
     data: {
       name: b.name ?? "",
       unit: b.unit ?? "g",
-      pricePerUnit: Number(b.pricePerUnit ?? b.price_per_unit ?? 0),
+      pricePerUnit: Number(b.pricePerUnit ?? 0),
       allergens: Array.isArray(b.allergens) ? b.allergens : [],
     },
   });
@@ -1008,30 +1140,30 @@ router.post("/dishes", requireCsrf, async (req, res) => {
     name: b.name ?? "",
     description: b.description ?? "",
     longDescription: b.longDescription ?? "",
-    imageUrl: b.imageUrl ?? b.image_url ?? null,
-    categorySlug: b.categorySlug ?? b.category_slug ?? null,
-    productType: b.productType ?? b.product_type ?? "dish",
-    priceNetto: Number(b.priceNetto ?? b.price_netto ?? 0),
-    vatRate: Number(b.vatRate ?? b.vat_rate ?? 8),
-    priceBrutto: Number(b.priceBrutto ?? b.price_brutto ?? 0),
-    pricePerUnit: Number(b.pricePerUnit ?? b.price_per_unit ?? 0),
+    imageUrl: b.imageUrl ?? null,
+    categorySlug: b.categorySlug ?? null,
+    productType: b.productType ?? "dish",
+    priceNetto: Number(b.priceNetto ?? 0),
+    vatRate: Number(b.vatRate ?? 8),
+    priceBrutto: Number(b.priceBrutto ?? 0),
+    pricePerUnit: Number(b.pricePerUnit ?? 0),
     pricePerUnitOnSite: b.pricePerUnitOnSite != null ? Number(b.pricePerUnitOnSite) : null,
-    unitLabel: b.unitLabel ?? b.unit_label ?? "szt.",
-    minQuantity: Number(b.minQuantity ?? b.min_quantity ?? 1),
+    unitLabel: b.unitLabel ?? "szt.",
+    minQuantity: Number(b.minQuantity ?? 1),
     icon: b.icon ?? "🍽️",
     contents: Array.isArray(b.contents) ? b.contents : [],
-    dietaryTags: Array.isArray(b.dietaryTags ?? b.dietary_tags) ? (b.dietaryTags ?? b.dietary_tags) : [],
+    dietaryTags: Array.isArray(b.dietaryTags) ? b.dietaryTags : [],
     allergens: Array.isArray(b.allergens) ? b.allergens : [],
   };
   const created = await prisma.dish.create({
     data: dishPayload,
     include: { dishIngredients: true },
   });
-  if (Array.isArray(b.dish_ingredients) && b.dish_ingredients.length > 0) {
+  if (Array.isArray(b.dishIngredients) && b.dishIngredients.length > 0) {
     await prisma.dishIngredient.createMany({
-      data: b.dish_ingredients.map((di) => ({
+      data: b.dishIngredients.map((di) => ({
         dishId: created.id,
-        ingredientId: di.ingredient_id ?? di.ingredientId,
+        ingredientId: di.ingredientId,
         quantity: Number(di.quantity ?? 0),
       })),
     });
@@ -1044,30 +1176,38 @@ router.post("/dishes", requireCsrf, async (req, res) => {
 });
 router.patch("/dishes/:id", requireCsrf, async (req, res) => {
   const id = req.params.id;
+  const existing = await prisma.dish.findUnique({
+    where: { id },
+    select: { imageUrl: true },
+  });
   const b = req.body ?? {};
   const data = {};
-  [
+  const stringFields = [
     "name", "description", "longDescription", "imageUrl", "categorySlug", "productType",
-    "priceNetto", "vatRate", "priceBrutto", "pricePerUnit", "pricePerUnitOnSite",
-    "unitLabel", "minQuantity", "icon", "contents", "dietaryTags", "allergens",
-  ].forEach((key) => {
-    const snake = key.replace(/([A-Z])/g, "_$1").toLowerCase();
-    const v = b[key] ?? b[snake];
-    if (v === undefined) return;
-    if (["contents", "dietaryTags", "allergens"].includes(key)) data[key] = Array.isArray(v) ? v : [];
-    else if (key.includes("price") || key.includes("Quantity") || key.includes("Rate")) data[key] = Number(v);
-    else data[key] = v;
+    "unitLabel", "icon",
+  ];
+  stringFields.forEach((key) => {
+    if (b[key] !== undefined) data[key] = b[key];
+  });
+  ["priceNetto", "vatRate", "priceBrutto", "pricePerUnit", "minQuantity"].forEach((key) => {
+    if (b[key] !== undefined) data[key] = Number(b[key]);
+  });
+  if (b.pricePerUnitOnSite !== undefined) {
+    data.pricePerUnitOnSite = b.pricePerUnitOnSite == null ? null : Number(b.pricePerUnitOnSite);
+  }
+  ["contents", "dietaryTags", "allergens"].forEach((key) => {
+    if (b[key] !== undefined) data[key] = Array.isArray(b[key]) ? b[key] : [];
   });
   if (Object.keys(data).length > 0) {
     await prisma.dish.update({ where: { id }, data });
   }
-  if (Array.isArray(b.dish_ingredients)) {
+  if (Array.isArray(b.dishIngredients)) {
     await prisma.dishIngredient.deleteMany({ where: { dishId: id } });
-    if (b.dish_ingredients.length > 0) {
+    if (b.dishIngredients.length > 0) {
       await prisma.dishIngredient.createMany({
-        data: b.dish_ingredients.map((di) => ({
+        data: b.dishIngredients.map((di) => ({
           dishId: id,
-          ingredientId: di.ingredient_id ?? di.ingredientId,
+          ingredientId: di.ingredientId,
           quantity: Number(di.quantity ?? 0),
         })),
       });
@@ -1077,16 +1217,24 @@ router.patch("/dishes/:id", requireCsrf, async (req, res) => {
     where: { id },
     include: { dishIngredients: { include: { ingredient: true } } },
   });
+  if (Object.prototype.hasOwnProperty.call(data, "imageUrl")) {
+    await deleteImageIfReplaced(existing?.imageUrl, updated?.imageUrl ?? null);
+  }
   res.json(updated);
 });
 router.delete("/dishes/:id", requireCsrf, async (req, res) => {
+  const existing = await prisma.dish.findUnique({
+    where: { id: req.params.id },
+    select: { imageUrl: true },
+  });
   await prisma.dishIngredient.deleteMany({ where: { dishId: req.params.id } });
   await prisma.dish.delete({ where: { id: req.params.id } });
+  await deleteStoredUploadIfAppOwned(existing?.imageUrl);
   res.status(204).send();
 });
 
 router.get("/dish-ingredients", async (req, res) => {
-  const dishId = req.query.dish_id;
+  const dishId = req.query.dishId;
   const rows = dishId
     ? await prisma.dishIngredient.findMany({ where: { dishId }, include: { ingredient: true } })
     : await prisma.dishIngredient.findMany({ include: { ingredient: true } });
@@ -1112,28 +1260,28 @@ router.post("/bundles", requireCsrf, async (req, res) => {
     priceNetto: Number(b.priceNetto ?? 0),
     vatRate: Number(b.vatRate ?? 8),
     priceBrutto: Number(b.priceBrutto ?? 0),
-    basePrice: Number(b.basePrice ?? b.base_price ?? 0),
+    basePrice: Number(b.basePrice ?? 0),
     converter: Number(b.converter ?? 1),
     minQuantity: Number(b.minQuantity ?? 1),
     icon: b.icon ?? "🍽️",
-    dietaryTags: Array.isArray(b.dietary_tags ?? b.dietaryTags) ? (b.dietary_tags ?? b.dietaryTags) : [],
+    dietaryTags: Array.isArray(b.dietaryTags) ? b.dietaryTags : [],
   };
   const created = await prisma.bundle.create({
     data: bundlePayload,
     include: { bundleVariants: true },
   });
-  if (Array.isArray(b.bundle_variants) && b.bundle_variants.length > 0) {
+  if (Array.isArray(b.bundleVariants) && b.bundleVariants.length > 0) {
     await prisma.bundleVariant.createMany({
-      data: b.bundle_variants.map((v, i) => ({
+      data: b.bundleVariants.map((v, i) => ({
         bundleId: created.id,
         name: v.name ?? "",
         description: v.description ?? "",
         price: Number(v.price ?? 0),
-        priceOnSite: v.price_on_site != null ? Number(v.price_on_site) : null,
-        dishId: v.dish_id ?? v.dishId ?? null,
-        dietaryTags: Array.isArray(v.dietary_tags ?? v.dietaryTags) ? (v.dietary_tags ?? v.dietaryTags) : [],
+        priceOnSite: v.priceOnSite != null ? Number(v.priceOnSite) : null,
+        dishId: v.dishId ?? null,
+        dietaryTags: Array.isArray(v.dietaryTags) ? v.dietaryTags : [],
         allergens: Array.isArray(v.allergens) ? v.allergens : [],
-        sortOrder: v.sort_order ?? v.sortOrder ?? i,
+        sortOrder: v.sortOrder ?? i,
       })),
     });
   }
@@ -1145,28 +1293,32 @@ router.post("/bundles", requireCsrf, async (req, res) => {
 });
 router.patch("/bundles/:id", requireCsrf, async (req, res) => {
   const id = req.params.id;
+  const existing = await prisma.bundle.findUnique({
+    where: { id },
+    select: { imageUrl: true },
+  });
   const b = req.body ?? {};
-  const bodyForBundle = pickWithSnakeFallback(b, BUNDLE_PATCH_KEYS);
+  const bodyForBundle = pickDefined(b, BUNDLE_PATCH_KEYS);
   const parsed = bundlePatchSchema.safeParse(bodyForBundle);
   if (!parsed.success) {
     return res.status(400).json({ error: "Validation failed", details: parsed.error.flatten() });
   }
   const data = Object.fromEntries(Object.entries(parsed.data).filter(([, v]) => v !== undefined));
   if (Object.keys(data).length > 0) await prisma.bundle.update({ where: { id }, data });
-  if (Array.isArray(b.bundle_variants)) {
+  if (Array.isArray(b.bundleVariants)) {
     await prisma.bundleVariant.deleteMany({ where: { bundleId: id } });
-    if (b.bundle_variants.length > 0) {
+    if (b.bundleVariants.length > 0) {
       await prisma.bundleVariant.createMany({
-        data: b.bundle_variants.map((v, i) => ({
+        data: b.bundleVariants.map((v, i) => ({
           bundleId: id,
           name: v.name ?? "",
           description: v.description ?? "",
           price: Number(v.price ?? 0),
-          priceOnSite: v.price_on_site != null ? Number(v.price_on_site) : null,
-          dishId: v.dish_id ?? v.dishId ?? null,
-          dietaryTags: Array.isArray(v.dietary_tags ?? v.dietaryTags) ? (v.dietary_tags ?? v.dietaryTags) : [],
+          priceOnSite: v.priceOnSite != null ? Number(v.priceOnSite) : null,
+          dishId: v.dishId ?? null,
+          dietaryTags: Array.isArray(v.dietaryTags) ? v.dietaryTags : [],
           allergens: Array.isArray(v.allergens) ? v.allergens : [],
-          sortOrder: v.sort_order ?? v.sortOrder ?? i,
+          sortOrder: v.sortOrder ?? i,
         })),
       });
     }
@@ -1175,11 +1327,19 @@ router.patch("/bundles/:id", requireCsrf, async (req, res) => {
     where: { id },
     include: { bundleVariants: { orderBy: { sortOrder: "asc" } } },
   });
+  if (Object.prototype.hasOwnProperty.call(data, "imageUrl")) {
+    await deleteImageIfReplaced(existing?.imageUrl, updated?.imageUrl ?? null);
+  }
   res.json(updated);
 });
 router.delete("/bundles/:id", requireCsrf, async (req, res) => {
+  const existing = await prisma.bundle.findUnique({
+    where: { id: req.params.id },
+    select: { imageUrl: true },
+  });
   await prisma.bundleVariant.deleteMany({ where: { bundleId: req.params.id } });
   await prisma.bundle.delete({ where: { id: req.params.id } });
+  await deleteStoredUploadIfAppOwned(existing?.imageUrl);
   res.status(204).send();
 });
 
@@ -1251,8 +1411,12 @@ router.post("/configurable-sets", requireCsrf, async (req, res) => {
 });
 router.patch("/configurable-sets/:id", requireCsrf, async (req, res) => {
   const id = req.params.id;
+  const existing = await prisma.configurableSet.findUnique({
+    where: { id },
+    select: { imageUrl: true },
+  });
   const b = req.body ?? {};
-  const bodyForSet = pickWithSnakeFallback(b, CONFIGURABLE_SET_PATCH_KEYS);
+  const bodyForSet = pickDefined(b, CONFIGURABLE_SET_PATCH_KEYS);
   const parsed = configurableSetPatchSchema.safeParse(bodyForSet);
   if (!parsed.success) {
     return res.status(400).json({ error: "Validation failed", details: parsed.error.flatten() });
@@ -1301,9 +1465,16 @@ router.patch("/configurable-sets/:id", requireCsrf, async (req, res) => {
       },
     },
   });
+  if (Object.prototype.hasOwnProperty.call(data, "imageUrl")) {
+    await deleteImageIfReplaced(existing?.imageUrl, updated?.imageUrl ?? null);
+  }
   res.json(updated);
 });
 router.delete("/configurable-sets/:id", requireCsrf, async (req, res) => {
+  const existing = await prisma.configurableSet.findUnique({
+    where: { id: req.params.id },
+    select: { imageUrl: true },
+  });
   const groups = await prisma.configGroup.findMany({ where: { setId: req.params.id }, select: { id: true } });
   const groupIds = groups.map((g) => g.id);
   if (groupIds.length > 0) {
@@ -1311,6 +1482,7 @@ router.delete("/configurable-sets/:id", requireCsrf, async (req, res) => {
     await prisma.configGroup.deleteMany({ where: { setId: req.params.id } });
   }
   await prisma.configurableSet.delete({ where: { id: req.params.id } });
+  await deleteStoredUploadIfAppOwned(existing?.imageUrl);
   res.status(204).send();
 });
 

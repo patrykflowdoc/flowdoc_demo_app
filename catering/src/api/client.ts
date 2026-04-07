@@ -4,6 +4,7 @@
  */
 
 import { z } from "zod";
+import imageCompression from "browser-image-compression";
 import { ProductSchema } from "@/lib/schemas/product";
 import type { EventType, Product } from "@/data/products";
 import { AdminOrderSchema, AdminOrdersSchema, type AdminOrder } from "@/lib/schemas/orders";
@@ -110,7 +111,7 @@ export async function getProductCategories(): Promise<{ id: string; dbId: string
   return request("/api/product-categories");
 }
 
-export async function getEventCategoryMappings(): Promise<{ event_type_id: string; category_id: string }[]> {
+export async function getEventCategoryMappings(): Promise<{ eventTypeId: string; categoryId: string }[]> {
   return request("/api/event-category-mappings");
 }
 
@@ -252,6 +253,26 @@ export async function updateCompanySettings(body: Record<string, unknown>): Prom
   return request("/api/admin/company-settings", { method: "PATCH", body });
 }
 
+export type AdminImageKind =
+  | "company"
+  | "dish"
+  | "bundle"
+  | "configurableSet"
+  | "extra"
+  | "extraBundle";
+
+export async function uploadAdminImage(file: File, kind: AdminImageKind): Promise<{ url: string }> {
+  const compressed = await imageCompression(file, {
+    maxSizeMB: 2,
+    maxWidthOrHeight: 1920,
+    useWebWorker: true,
+    initialQuality: 0.82,
+  }).catch(() => file);
+  const form = new FormData();
+  form.append("file", compressed);
+  return request(`/api/admin/uploads/${kind}`, { method: "POST", body: form });
+}
+
 export async function getAdminClients(): Promise<Array<Record<string, unknown> & { orders?: number; totalSpent?: number; lastOrder?: string | null }>> {
   return request("/api/admin/clients");
 }
@@ -293,23 +314,29 @@ export async function createAdminOrder(
 }
 
 export async function getAdminCatalog(): Promise<{
-  dishes: Array<{ id: string; name: string; unit_label: string; price_per_unit: number; price_brutto: number }>;
-  bundles: Array<{ id: string; name: string; base_price: number; converter?: number; bundle_variants: Array<{ id: string; name: string; price: number; sort_order: number; dish_id?: string | null }> }>;
-  configurable_sets: Array<{
+  dishes: Array<{ id: string; name: string; unitLabel: string; pricePerUnit: number; priceBrutto: number }>;
+  bundles: Array<{
     id: string;
     name: string;
-    price_per_person: number;
-    config_groups: Array<{
+    basePrice: number;
+    converter?: number;
+    bundleVariants: Array<{ id: string; name: string; price: number; sortOrder: number; dishId?: string | null }>;
+  }>;
+  configurableSets: Array<{
+    id: string;
+    name: string;
+    pricePerPerson: number;
+    configGroups: Array<{
       id: string;
       name: string;
-      min_selections: number;
-      max_selections: number;
-      sort_order: number;
+      minSelections: number;
+      maxSelections: number;
+      sortOrder: number;
       converter?: number;
-      config_group_options: Array<{ id: string; name: string; sort_order: number; converter?: number; dish_id?: string | null }>;
+      options: Array<{ id: string; name: string; sortOrder: number; converter?: number; dishId?: string | null }>;
     }>;
   }>;
-  extras: Array<{ id: string; name: string; price: number; unit_label: string; category: string }>;
+  extras: Array<{ id: string; name: string; price: number; unitLabel: string; category: string }>;
 }> {
   return request("/api/admin/catalog");
 }
@@ -346,7 +373,7 @@ export async function deleteEventType(id: string): Promise<void> {
   return request(`/api/admin/event-types/${id}`, { method: "DELETE" });
 }
 
-export async function getAdminEventCategoryMappings(): Promise<Array<{ id: string; event_type_id: string; category_id: string }>> {
+export async function getAdminEventCategoryMappings(): Promise<Array<{ id: string; eventTypeId: string; categoryId: string }>> {
   return request("/api/admin/event-category-mappings");
 }
 
@@ -354,7 +381,7 @@ export async function getAdminEventExtrasCategoryMappings(): Promise<Array<{ id:
   return request("/api/admin/event-extras-category-mappings");
 }
 
-export async function createEventCategoryMapping(body: { event_type_id: string; category_id: string }): Promise<unknown> {
+export async function createEventCategoryMapping(body: { eventTypeId: string; categoryId: string }): Promise<unknown> {
   return request("/api/admin/event-category-mappings", { method: "POST", body });
 }
 
@@ -362,7 +389,7 @@ export async function createEventExtrasCategoryMapping(body: { eventTypeId: stri
   return request("/api/admin/event-extras-category-mappings", { method: "POST", body });
 }
 
-export async function deleteEventCategoryMapping(params: { event_type_id: string; category_id: string }): Promise<void> {
+export async function deleteEventCategoryMapping(params: { eventTypeId: string; categoryId: string }): Promise<void> {
   const q = new URLSearchParams(params);
   return request(`/api/admin/event-category-mappings?${q}`, { method: "DELETE" });
 }
@@ -420,11 +447,11 @@ export async function deleteDeliveryZone(id: string): Promise<void> {
   return request(`/api/admin/delivery-zones/${id}`, { method: "DELETE" });
 }
 
-export async function getAdminBlockedDates(): Promise<Array<{ id: string; blocked_date: Date; reason?: string | null }>> {
+export async function getAdminBlockedDates(): Promise<Array<{ id: string; blockedDate: string; reason?: string | null }>> {
   return request("/api/admin/blocked-dates");
 }
 
-export async function createBlockedDate(body: { blocked_date: string; reason?: string }): Promise<unknown> {
+export async function createBlockedDate(body: { blockedDate: string; reason?: string }): Promise<unknown> {
   return request("/api/admin/blocked-dates", { method: "POST", body });
 }
 
@@ -481,7 +508,7 @@ export async function deleteDish(id: string): Promise<void> {
 }
 
 export async function getAdminDishIngredients(dishId?: string): Promise<unknown[]> {
-  const q = dishId ? `?dish_id=${encodeURIComponent(dishId)}` : "";
+  const q = dishId ? `?dishId=${encodeURIComponent(dishId)}` : "";
   return request(`/api/admin/dish-ingredients${q}`);
 }
 

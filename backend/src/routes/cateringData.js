@@ -37,7 +37,7 @@ router.get("/event-category-mappings", async (_req, res) => {
     select: { eventTypeId: true, categoryId: true },
   });
   res.json(
-    rows.map((r) => ({ event_type_id: r.eventTypeId, category_id: r.categoryId }))
+    rows.map((r) => ({ eventTypeId: r.eventTypeId, categoryId: r.categoryId }))
   );
 });
 

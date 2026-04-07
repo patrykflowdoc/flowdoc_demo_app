@@ -81,11 +81,7 @@ export function ContactForm({
       .then((data) => {
         if (cancelled) return;
         const raw = String(data.address ?? "").trim();
-        const full = String(
-          (data as { companyAddressFull?: string }).companyAddressFull ??
-            (data as { company_address_full?: string }).company_address_full ??
-            ""
-        ).trim();
+        const full = String((data as { companyAddressFull?: string }).companyAddressFull ?? "").trim();
         const text = raw || full || null;
         setPickupAddressText(text);
       })

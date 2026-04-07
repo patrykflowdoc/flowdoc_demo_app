@@ -82,18 +82,18 @@ const ClientDetailView = ({ client, onBack, onSave }: Props) => {
         return true;
       });
       combined.sort((a, b) => {
-        const da = (a.createdAt ?? a.created_at) as string;
-        const db = (b.createdAt ?? b.created_at) as string;
+        const da = a.createdAt as string;
+        const db = b.createdAt as string;
         return db.localeCompare(da);
       });
       setOrders(
         combined.map((o) => ({
           id: String(o.id),
-          orderNumber: String(o.orderNumber ?? o.order_number ?? ""),
-          date: (o.eventDate ?? o.event_date)
-            ? fmtDate(String(o.eventDate ?? o.event_date))
-            : fmtDate(String(o.createdAt ?? o.created_at)),
-          event: String(o.eventType ?? o.event_type ?? ""),
+          orderNumber: String(o.orderNumber ?? ""),
+          date: o.eventDate
+            ? fmtDate(String(o.eventDate))
+            : fmtDate(String(o.createdAt)),
+          event: String(o.eventType ?? ""),
           amount: fmtPLN(Number(o.amount ?? 0)) + " zł",
           status: String(o.status ?? ""),
         }))

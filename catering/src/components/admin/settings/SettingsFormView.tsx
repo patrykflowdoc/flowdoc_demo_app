@@ -122,13 +122,13 @@ const SettingsFormView = () => {
       setExtrasCategories(exCats.map((c) => ({
         id: String(c.id), name: String(c.name ?? ""), description: String(c.description ?? ""),
         icon: (c.icon as LucideIconName) || "Sparkles", slug: String(c.slug ?? ""),
-        isRequired: Boolean(c.isRequired ?? (c as Record<string, unknown>).is_required),
+        isRequired: Boolean(c.isRequired),
       })));
 
       const mappingsByEvent: Record<string, string[]> = {};
       mappings.forEach((m) => {
-        const eid = String(m.event_type_id ?? m.eventTypeId);
-        const cid = String(m.category_id ?? m.categoryId);
+        const eid = String(m.eventTypeId);
+        const cid = String(m.categoryId);
         if (!mappingsByEvent[eid]) mappingsByEvent[eid] = [];
         mappingsByEvent[eid].push(cid);
       });
@@ -201,9 +201,9 @@ const SettingsFormView = () => {
 
     try {
       if (has) {
-        await api.deleteEventCategoryMapping({ event_type_id: eventId, category_id: categoryId });
+        await api.deleteEventCategoryMapping({ eventTypeId: eventId, categoryId });
       } else {
-        await api.createEventCategoryMapping({ event_type_id: eventId, category_id: categoryId });
+        await api.createEventCategoryMapping({ eventTypeId: eventId, categoryId });
       }
     } catch {
       // ignore
@@ -238,7 +238,7 @@ const SettingsFormView = () => {
       setExtrasCategories([...extrasCategories, {
         id: String(data.id), name: String(data.name ?? ""), description: String(data.description ?? ""),
         icon: (data.icon as LucideIconName) || "Sparkles", slug: String(data.slug ?? ""),
-        isRequired: Boolean(data.isRequired ?? (data as Record<string, unknown>).is_required),
+        isRequired: Boolean(data.isRequired),
       }]);
     } catch (err: unknown) {
       toast.error("Błąd: " + (err instanceof Error ? err.message : String(err)));

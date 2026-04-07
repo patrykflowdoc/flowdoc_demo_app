@@ -1,12 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { getCompanySettings, updateCompanySettings } from "@/api/client";
+import { getCompanySettings, updateCompanySettings, uploadAdminImage } from "@/api/client";
 import { toast } from "@/components/ui/sonner";
-import { X, Image } from "lucide-react";
+import { Image, Loader2, Upload, X } from "lucide-react";
 
 const SettingsCompanyView = () => {
   const [_settingsId, setSettingsId] = useState<string | null>(null);
@@ -21,6 +21,10 @@ const SettingsCompanyView = () => {
   const [privacyPolicyUrl, setPrivacyPolicyUrl] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingFavicon, setUploadingFavicon] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const faviconInputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     getCompanySettings()
       .then((data: Record<string, unknown>) => {
@@ -43,6 +47,22 @@ const SettingsCompanyView = () => {
     if (type === "logo") setLogoUrl(null);
     else setFaviconUrl(null);
     toast.success(type === "logo" ? "Logo usunięte" : "Favicon usunięty");
+  };
+
+  const uploadCompanyAsset = async (type: "logo" | "favicon", file: File) => {
+    if (type === "logo") setUploadingLogo(true);
+    else setUploadingFavicon(true);
+    try {
+      const uploaded = await uploadAdminImage(file, "company");
+      if (type === "logo") setLogoUrl(uploaded.url);
+      else setFaviconUrl(uploaded.url);
+      toast.success(type === "logo" ? "Logo przesłane" : "Favicon przesłany");
+    } catch (err: unknown) {
+      toast.error("Błąd uploadu: " + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      if (type === "logo") setUploadingLogo(false);
+      else setUploadingFavicon(false);
+    }
   };
 
   const handleSave = async () => {
@@ -92,7 +112,7 @@ const SettingsCompanyView = () => {
             <div className="grid grid-cols-2 gap-6">
               {/* Main logo */}
               <div className="space-y-3">
-                <Label>Logo główne (URL)</Label>
+                <Label>Logo główne</Label>
                 <div className="border-2 border-dashed border-border rounded-lg p-4 flex flex-col items-center justify-center min-h-[140px] relative">
                   {logoUrl ? (
                     <>
@@ -108,20 +128,31 @@ const SettingsCompanyView = () => {
                   ) : (
                     <div className="flex flex-col items-center gap-2 text-muted-foreground">
                       <Image className="w-10 h-10" />
-                      <span className="text-xs">Wklej URL logo poniżej</span>
+                      <span className="text-xs">Wybierz plik logo</span>
                     </div>
                   )}
                 </div>
-                <Input
-                  placeholder="https://example.com/logo.png"
-                  value={logoUrl ?? ""}
-                  onChange={(e) => setLogoUrl(e.target.value || null)}
+                <input
+                  ref={logoInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    void uploadCompanyAsset("logo", file);
+                    e.target.value = "";
+                  }}
                 />
+                <Button type="button" variant="outline" onClick={() => logoInputRef.current?.click()} disabled={uploadingLogo}>
+                  {uploadingLogo ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
+                  {uploadingLogo ? "Przesyłanie..." : "Prześlij logo"}
+                </Button>
               </div>
 
               {/* Favicon */}
               <div className="space-y-3">
-                <Label>Favicon (URL)</Label>
+                <Label>Favicon</Label>
                 <div className="border-2 border-dashed border-border rounded-lg p-4 flex flex-col items-center justify-center min-h-[140px] relative">
                   {faviconUrl ? (
                     <>
@@ -137,15 +168,26 @@ const SettingsCompanyView = () => {
                   ) : (
                     <div className="flex flex-col items-center gap-2 text-muted-foreground">
                       <Image className="w-10 h-10" />
-                      <span className="text-xs">Wklej URL favicon poniżej</span>
+                      <span className="text-xs">Wybierz plik favicon</span>
                     </div>
                   )}
                 </div>
-                <Input
-                  placeholder="https://example.com/favicon.ico"
-                  value={faviconUrl ?? ""}
-                  onChange={(e) => setFaviconUrl(e.target.value || null)}
+                <input
+                  ref={faviconInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    void uploadCompanyAsset("favicon", file);
+                    e.target.value = "";
+                  }}
                 />
+                <Button type="button" variant="outline" onClick={() => faviconInputRef.current?.click()} disabled={uploadingFavicon}>
+                  {uploadingFavicon ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
+                  {uploadingFavicon ? "Przesyłanie..." : "Prześlij favicon"}
+                </Button>
               </div>
             </div>
           </CardContent>

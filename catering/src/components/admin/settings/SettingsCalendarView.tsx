@@ -11,7 +11,7 @@ import { toast } from "@/components/ui/sonner";
 
 const blockedDateItemSchema = z.object({
   id: z.union([z.string(), z.number()]).transform(String),
-  blocked_date: z.string(),
+  blockedDate: z.string(),
   reason: z.union([z.string(), z.null(), z.undefined()]).transform((v) => (v == null ? "" : String(v))),
 });
 
@@ -41,7 +41,7 @@ const SettingsCalendarView = () => {
         }
         const mapped: BlockedDate[] = parsed.data
           .map((d) => {
-            const date = new Date(d.blocked_date);
+            const date = new Date(d.blockedDate);
             return { id: d.id, date, reason: d.reason };
           })
           .filter((bd) => isValid(bd.date));
@@ -62,7 +62,7 @@ const SettingsCalendarView = () => {
     }
 
     try {
-      const data = await api.createBlockedDate({ blocked_date: newDate, reason: newReason || undefined }) as Record<string, unknown>;
+      const data = await api.createBlockedDate({ blockedDate: newDate, reason: newReason || undefined }) as Record<string, unknown>;
       setBlockedDates(
         [...blockedDates, { id: String(data.id), date: parsed, reason: newReason }].sort(
           (a, b) => a.date.getTime() - b.date.getTime()

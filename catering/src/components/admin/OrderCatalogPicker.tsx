@@ -41,53 +41,53 @@ export function useCatalogProducts() {
           items.push({
             id: d.id,
             name: d.name,
-            unit: d.unit_label || "szt.",
-            defaultPrice: Number(d.price_per_unit ?? d.price_brutto),
+            unit: d.unitLabel || "szt.",
+            defaultPrice: Number(d.pricePerUnit ?? d.priceBrutto),
             type: "simple",
           });
         }
         for (const b of data.bundles ?? []) {
-          const variants = (b.bundle_variants ?? [])
-            .sort((a, c) => a.sort_order - c.sort_order)
+          const variants = (b.bundleVariants ?? [])
+            .sort((a, c) => a.sortOrder - c.sortOrder)
             .map((v) => ({
               id: v.id,
               name: v.name,
               price: v.price,
-              dishId: v.dish_id ?? null,
+              dishId: v.dishId ?? null,
             }));
           items.push({
             id: b.id,
             name: b.name,
             unit: "szt.",
-            defaultPrice: Number(b.base_price),
+            defaultPrice: Number(b.basePrice),
             type: "bundle",
             converter: Number(b.converter ?? 1),
             variants,
           });
         }
-        for (const s of data.configurable_sets ?? []) {
-          const optionGroups = (s.config_groups ?? [])
-            .sort((a, c) => a.sort_order - c.sort_order)
+        for (const s of data.configurableSets ?? []) {
+          const optionGroups = (s.configGroups ?? [])
+            .sort((a, c) => a.sortOrder - c.sortOrder)
             .map((g) => ({
               id: g.id,
               name: g.name,
-              minSelections: g.min_selections,
-              maxSelections: g.max_selections,
+              minSelections: g.minSelections,
+              maxSelections: g.maxSelections,
               converter: Number(g.converter ?? 1),
-              options: (g.config_group_options ?? [])
-                .sort((a, c) => a.sort_order - c.sort_order)
+              options: (g.options ?? [])
+                .sort((a, c) => a.sortOrder - c.sortOrder)
                 .map((o) => ({
                   id: o.id,
                   name: o.name,
                   converter: Number(o.converter ?? 1),
-                  dishId: o.dish_id ?? null,
+                  dishId: o.dishId ?? null,
                 })),
             }));
           items.push({
             id: s.id,
             name: s.name,
             unit: "os.",
-            defaultPrice: Number(s.price_per_person),
+            defaultPrice: Number(s.pricePerPerson),
             type: "configurable",
             optionGroups,
           });
@@ -97,7 +97,7 @@ export function useCatalogProducts() {
           items.push({
             id: e.id,
             name: e.name,
-            unit: e.unit_label || "szt.",
+            unit: e.unitLabel || "szt.",
             defaultPrice: Number(e.price),
             type: t,
           });

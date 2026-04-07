@@ -10,6 +10,9 @@ app.szczyptasmaku.com {
     handle /admin/* {
         reverse_proxy backend:25044
     }
+    handle /uploads/* {
+        reverse_proxy backend:25044
+    }
     handle {
         reverse_proxy catering:3000 {
             header_up Connection {>Connection}
@@ -37,6 +40,9 @@ http://159.89.29.29 {
     handle /admin/* {
         reverse_proxy backend:25044
     }
+    handle /uploads/* {
+        reverse_proxy backend:25044
+    }
     handle {
         reverse_proxy catering:3000 {
             header_up Connection {>Connection}
@@ -61,6 +67,9 @@ auth.localhost {
     tls internal
     
     handle /admin/* {
+        reverse_proxy backend:25044
+    }
+    handle /uploads/* {
         reverse_proxy backend:25044
     }
     reverse_proxy catering:3000 {

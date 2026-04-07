@@ -10,6 +10,7 @@ import ordersRoutes from "./routes/orders.js";
 import deliveryRoutes from "./routes/delivery.js";
 import stripeRoutes, { stripeWebhookHandler } from "./routes/stripe.js";
 import adminRoutes from "./routes/admin.js";
+import { ensureUploadRoot, UPLOAD_DIR } from "./lib/uploads.js";
 
 // Log and avoid silent exit on uncaught errors
 // process.on("uncaughtException", (err) => {
@@ -22,6 +23,7 @@ import adminRoutes from "./routes/admin.js";
 // });
 
 const app = express();
+await ensureUploadRoot();
 
 const corsOrigin = process.env.CORS_ORIGIN || "http://localhost:3000";
 app.use(
@@ -40,6 +42,7 @@ app.post(
 );
 
 app.use(express.json());
+app.use("/uploads", express.static(UPLOAD_DIR, { maxAge: "7d", etag: true }));
 
 app.get("/", (req, res) => {
   res.send("Szczypta Smaku API");

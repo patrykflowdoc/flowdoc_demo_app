@@ -119,6 +119,6 @@ export interface DbClient {
 export type OrderDocumentType = "offer" | "kitchen" | "food-cost" | "full";
 
 export type EventExtrasCategoryMapping = {
-  event_type_id: string;
-  extras_category_id: string;
+  eventTypeId: string;
+  extrasCategoryId: string;
 };
