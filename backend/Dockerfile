@@ -28,8 +28,9 @@ RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 
 COPY src ./src
-RUN chown -R nodejs:nodejs /app
-USER nodejs
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chown -R nodejs:nodejs /app && chmod +x /docker-entrypoint.sh
 
 EXPOSE 25044
+ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["node", "src/index.js"]
