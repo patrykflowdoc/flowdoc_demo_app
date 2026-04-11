@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useMemo, useRef, type PointerEvent as ReactPointerEvent } from "react";
+import { useState, useEffect, useCallback, useRef, type PointerEvent as ReactPointerEvent } from "react";
 import * as api from "@/api/client";
-import { Search, Eye, Pencil, Trash2, ChevronDown, ArrowLeft, FileText, X, Check, Calculator, FileDown, CookingPot, ClipboardList, Plus, Download, ChevronRight, CalendarDays, Copy, ExternalLink, RefreshCw, Settings2, Calendar, Clock } from "lucide-react";
+import { Search, Eye, Pencil, Trash2, ChevronDown, ArrowLeft, FileText, X, Check, Calculator, FileDown, CookingPot, ClipboardList, Plus, Download, ChevronRight, CalendarDays, Copy, ExternalLink, RefreshCw, Settings2 } from "lucide-react";
 import { generateOfferPdf, generateFoodCostPdf, generateKitchenPdf, generateSummaryPdf, type SummaryDocType } from "@/lib/generatePdf";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import type { LucideIcon } from "lucide-react";
@@ -30,7 +30,6 @@ import type {
   FoodCostExtra,
   Order,
   OrderDocumentType,
-  OrderEventDay,
   OrderStatus,
   OrderItem,
 } from "@/types/orders";
@@ -847,147 +846,6 @@ const OrderDetailView = ({
   );
 };
 
-// ===== ADD/EDIT SESSION DIALOG (jak karta „Wydarzenie” + kontekst dnia) =====
-type EventDayForm = {
-  id: string;
-  label: string;
-  eventType: string;
-  date: string;
-  startTime: string;
-  endTime: string;
-  guestCount: number;
-  deliveryAddress: string;
-};
-
-const EventDayDialog = ({
-  open,
-  initial,
-  isEdit,
-  onSave,
-  onClose,
-}: {
-  open: boolean;
-  initial: EventDayForm | null;
-  /** true gdy edytujemy istniejący wpis z listy dni (nie pierwsze otwarcie „nowego” ID). */
-  isEdit: boolean;
-  onSave: (d: EventDayForm) => void;
-  onClose: () => void;
-}) => {
-  const [label, setLabel] = useState(initial?.label ?? "");
-  const [eventType, setEventType] = useState(initial?.eventType ?? "");
-  const [date, setDate] = useState(initial?.date ?? "");
-  const [startTime, setStartTime] = useState(initial?.startTime ?? "");
-  const [endTime, setEndTime] = useState(initial?.endTime ?? "");
-  const [guestCount, setGuestCount] = useState(initial?.guestCount ?? 0);
-  const [deliveryAddress, setDeliveryAddress] = useState(initial?.deliveryAddress ?? "");
-
-  useEffect(() => {
-    if (open) {
-      setLabel(initial?.label ?? "");
-      setEventType(initial?.eventType ?? "");
-      setDate(initial?.date ?? "");
-      setStartTime(initial?.startTime ?? "");
-      setEndTime(initial?.endTime ?? "");
-      setGuestCount(initial?.guestCount ?? 0);
-      setDeliveryAddress(initial?.deliveryAddress ?? "");
-    }
-  }, [open, initial]);
-
-  const handleSave = () => {
-    if (!date) return;
-    onSave({
-      id: initial?.id ?? randomUUID(),
-      label,
-      eventType,
-      date,
-      startTime,
-      endTime,
-      guestCount,
-      deliveryAddress,
-    });
-    onClose();
-  };
-
-  return (
-    <Sheet open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
-        <SheetHeader>
-          <SheetTitle>{isEdit ? "Edytuj dzień wydarzenia" : "Nowy dzień wydarzenia"}</SheetTitle>
-          <p className="text-sm text-muted-foreground font-normal text-left">
-            Te same pola co przy pojedynczej ofercie — do tego dnia przypiszesz pozycje poniżej w panelu.
-          </p>
-        </SheetHeader>
-        <div className="mt-6 space-y-5">
-          <div className="space-y-2">
-            <Label htmlFor="day-label">Nazwa dnia / sesji (opcjonalnie)</Label>
-            <Input
-              id="day-label"
-              placeholder="np. Dzień 1 — kolacja"
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="day-event-type">Typ wydarzenia</Label>
-            <Input
-              id="day-event-type"
-              placeholder="np. Komunia, Wesele"
-              value={eventType}
-              onChange={(e) => setEventType(e.target.value)}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="day-date">
-              Data <span className="text-destructive">*</span>
-            </Label>
-            <Input id="day-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label htmlFor="day-start">Godzina</Label>
-              <Input id="day-start" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="day-end">Godzina koniec (opcjonalnie)</Label>
-              <Input id="day-end" type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="day-guests">Liczba gości</Label>
-            <Input
-              id="day-guests"
-              type="number"
-              min={0}
-              inputMode="numeric"
-              placeholder="np. 70"
-              value={guestCount || ""}
-              onChange={(e) => setGuestCount(Math.max(0, parseInt(e.target.value, 10) || 0))}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="day-delivery">Miejsce / adres dostawy</Label>
-            <Input
-              id="day-delivery"
-              placeholder="Adres lub opis miejsca"
-              value={deliveryAddress}
-              onChange={(e) => setDeliveryAddress(e.target.value)}
-            />
-          </div>
-          <div className="flex gap-3 pt-2">
-            <Button onClick={handleSave} disabled={!date} className="flex-1">
-              <Check className="w-4 h-4 mr-1" />
-              Zapisz dzień
-            </Button>
-            <Button variant="outline" onClick={onClose} className="flex-1">
-              Anuluj
-            </Button>
-          </div>
-        </div>
-      </SheetContent>
-    </Sheet>
-  );
-};
-
 // ===== ORDER EDIT VIEW =====
 const OrderEditView = ({ order, onBack, onSave }: { order: Order; onBack: () => void; onSave: (o: Order) => void }) => {
   const [status, setStatus] = useState<OrderStatus>(order.status);
@@ -997,40 +855,17 @@ const OrderEditView = ({ order, onBack, onSave }: { order: Order; onBack: () => 
   const [eventDateIso, setEventDateIso] = useState(order.eventDateIso ?? "");
   const [eventTimeHHMM, setEventTimeHHMM] = useState(order.eventTimeHHMM ?? "");
   const [guestCount, setGuestCount] = useState(order.guestCount);
-  const [items, setItems] = useState<OrderItem[]>(order.items.map(i => ({ ...i })));
+  const [items, setItems] = useState<OrderItem[]>(
+    order.items.map((i) => ({ ...i, orderEventDayId: null }))
+  );
   const [discount, setDiscount] = useState(order.discount || 0);
-  /** single = jedna lista bez dni; multi + dayId = nowa pozycja trafia do wybranego dnia (null = „bez dnia”) */
-  type AddPanelTarget = { mode: "single" } | { mode: "multi"; dayId: string | null };
-  const [addPanel, setAddPanel] = useState<{ open: boolean; target: AddPanelTarget }>({
-    open: false,
-    target: { mode: "single" },
-  });
+  const [addPanelOpen, setAddPanelOpen] = useState(false);
   const [addSearch, setAddSearch] = useState("");
   const [configuringProduct, setConfiguringProduct] = useState<CatalogProduct | null>(null);
   // index pozycji, której edytujemy subItems (dla zestawów konfigurowalnych)
   const [editingSubItemsIndex, setEditingSubItemsIndex] = useState<number | null>(null);
-  // Dni wydarzenia
-  const [eventDays, setEventDays] = useState<EventDayForm[]>(
-    (order.eventDays ?? []).map((d) => ({
-      id: d.id,
-      label: d.label,
-      eventType: d.eventType ?? "",
-      date: d.date ?? "",
-      startTime: d.startTime ? new Date(d.startTime).toISOString().slice(11, 16) : "",
-      endTime: d.endTime ? new Date(d.endTime).toISOString().slice(11, 16) : "",
-      guestCount: d.guestCount ?? 0,
-      deliveryAddress: d.deliveryAddress ?? "",
-    }))
-  );
-  const [dayDialogOpen, setDayDialogOpen] = useState(false);
-  const [editingDay, setEditingDay] = useState<EventDayForm | null>(null);
 
   const catalogProducts = useCatalogProducts();
-
-  const orderEventDayIdForNewLine = (): string | null => {
-    if (addPanel.target.mode === "single") return null;
-    return addPanel.target.dayId;
-  };
 
   const updateItem = (index: number, field: "quantity" | "pricePerUnit", value: number) => {
     setItems(prev => prev.map((item, i) => {
@@ -1062,16 +897,15 @@ const OrderEditView = ({ order, onBack, onSave }: { order: Order; onBack: () => 
       setConfiguringProduct(product);
       return;
     }
-    const dayId = orderEventDayIdForNewLine();
     setItems(prev => [...prev, {
       id: product.id,
       name: product.name, quantity: 1, unit: product.unit,
       pricePerUnit: product.defaultPrice, total: product.defaultPrice, type: product.type,
       sourceProductId: product.id,
-      orderEventDayId: dayId,
+      orderEventDayId: null,
       subItems: null,
     }]);
-    setAddPanel((p) => ({ ...p, open: false }));
+    setAddPanelOpen(false);
     setAddSearch("");
   };
 
@@ -1085,18 +919,17 @@ const OrderEditView = ({ order, onBack, onSave }: { order: Order; onBack: () => 
       return;
     }
     if (!configuringProduct) return;
-    const dayId = orderEventDayIdForNewLine();
     setItems(prev => [...prev, {
       id: configuringProduct.id,
       name: configuringProduct.name, quantity: 1, unit: configuringProduct.unit,
       pricePerUnit: configuringProduct.defaultPrice, total: configuringProduct.defaultPrice,
       type: configuringProduct.type,
       sourceProductId: configuringProduct.id,
-      orderEventDayId: dayId,
+      orderEventDayId: null,
       subItems: subItems ?? null,
     }]);
     setConfiguringProduct(null);
-    setAddPanel((p) => ({ ...p, open: false }));
+    setAddPanelOpen(false);
     setAddSearch("");
   };
 
@@ -1119,41 +952,27 @@ const OrderEditView = ({ order, onBack, onSave }: { order: Order; onBack: () => 
   const finalAmount = totalAmount - discount;
 
   const handleSave = () => {
-    const first = eventDays[0];
-    const useFirstDay = eventDays.length > 0 && first;
-    const dateIsoEff = useFirstDay ? (first.date.trim() || null) : eventDateIso.trim() || null;
-    const timeHmEff = useFirstDay ? (first.startTime.trim() || null) : eventTimeHHMM.trim() || null;
+    const dateIsoEff = eventDateIso.trim() || null;
+    const timeHmEff = eventTimeHHMM.trim() || null;
     const dateDisplay = dateIsoEff
       ? formatOrderDate(`${dateIsoEff}T12:00:00.000Z`)
       : order.date;
     const timeDisplay = timeHmEff ? timeHmEff : order.time;
-    const eventEff = useFirstDay ? first.eventType : eventType;
-    const guestsEff = useFirstDay ? first.guestCount : guestCount;
-    const addrEff = useFirstDay ? first.deliveryAddress : deliveryAddress;
+    const itemsFlat = items.map((it) => ({ ...it, orderEventDayId: null }));
     onSave({
       ...order,
       status,
       notes,
-      deliveryAddress: addrEff,
-      event: eventEff,
-      guestCount: guestsEff,
+      deliveryAddress,
+      event: eventType,
+      guestCount,
       eventDateIso: dateIsoEff,
       eventTimeHHMM: timeHmEff,
       date: dateDisplay,
       time: timeDisplay,
-      items,
+      items: itemsFlat,
       discount,
-      eventDays: eventDays.map((d, i) => ({
-        id: d.id,
-        label: d.label,
-        date: d.date || null,
-        startTime: d.startTime ? `1970-01-01T${d.startTime}:00.000Z` : null,
-        endTime: d.endTime ? `1970-01-01T${d.endTime}:00.000Z` : null,
-        sortOrder: i,
-        eventType: d.eventType.trim() || null,
-        guestCount: d.guestCount,
-        deliveryAddress: d.deliveryAddress.trim() || null,
-      })),
+      eventDays: [],
       amount: fmtNum(finalAmount) + " zł",
       amountNum: finalAmount,
     });
@@ -1167,25 +986,6 @@ const OrderEditView = ({ order, onBack, onSave }: { order: Order; onBack: () => 
 
   const primaryRows = allRowsIndexed.filter(({ item }) => !isAddonLineItem(effectiveLineItemType(item)));
   const addonRows = allRowsIndexed.filter(({ item }) => isAddonLineItem(effectiveLineItemType(item)));
-
-  const hasDays = eventDays.length > 0;
-
-  const dayIds = useMemo(() => new Set(eventDays.map((d) => d.id)), [eventDays]);
-
-  const rowsForDay = (dayId: string) =>
-    allRowsIndexed.filter(({ item }) => item.orderEventDayId === dayId);
-
-  const unassignedRows = allRowsIndexed.filter(
-    ({ item }) => !item.orderEventDayId || !dayIds.has(String(item.orderEventDayId))
-  );
-
-  const addPanelLabel = (): string => {
-    if (addPanel.target.mode === "single") return "Dodajesz pozycję do zamówienia";
-    if (addPanel.target.dayId === null) return "Dodajesz pozycję (bez przypisanego dnia)";
-    const d = eventDays.find((x) => x.id === addPanel.target.dayId);
-    const bits = [d?.label, d?.date].filter(Boolean);
-    return `Dodajesz do: ${bits.length ? bits.join(" — ") : "wybranego dnia"}`;
-  };
 
   const renderEditRow = ({ item, index }: { item: OrderItem; index: number }) => (
     <TableRow key={index}>
@@ -1289,25 +1089,6 @@ const OrderEditView = ({ order, onBack, onSave }: { order: Order; onBack: () => 
         </div>
       </div>
 
-      {/* Dialog dodawania/edycji dnia */}
-      <EventDayDialog
-        open={dayDialogOpen}
-        initial={editingDay}
-        isEdit={editingDay != null && eventDays.some((x) => x.id === editingDay.id)}
-        onSave={(d) => {
-          setEventDays((prev) => {
-            const exists = prev.findIndex((x) => x.id === d.id);
-            const isNew = exists < 0;
-            const next = isNew ? [...prev, d] : prev.map((x, i) => (i === exists ? d : x));
-            if (isNew && prev.length === 0) {
-              setItems((lines) => lines.map((it) => ({ ...it, orderEventDayId: d.id })));
-            }
-            return next;
-          });
-        }}
-        onClose={() => { setDayDialogOpen(false); setEditingDay(null); }}
-      />
-
       {/* Inline SubItemSelector gdy edytujemy wybory zestawu */}
       {configuringProduct && (
         <div className="mb-4 p-4 rounded-lg border border-primary/30 bg-primary/5">
@@ -1342,12 +1123,11 @@ const OrderEditView = ({ order, onBack, onSave }: { order: Order; onBack: () => 
       <div className="flex flex-col lg:flex-row gap-6 items-start">
         <div className="w-full min-w-0 flex-1 space-y-4 order-1">
 
-        {!hasDays ? (
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Wydarzenie</CardTitle>
             <p className="text-sm text-muted-foreground font-normal">
-              Jedna data i miejsce — jak na interaktywnej ofercie. Gdy podzielisz ofertę na dni, szczegóły wpiszesz osobno dla każdego dnia (przycisk poniżej).
+              Jedna data i miejsce — jak na interaktywnej ofercie.
             </p>
           </CardHeader>
           <CardContent className="text-sm space-y-4">
@@ -1403,19 +1183,14 @@ const OrderEditView = ({ order, onBack, onSave }: { order: Order; onBack: () => 
             </div>
           </CardContent>
         </Card>
-        ) : (
-          <p className="text-sm text-muted-foreground rounded-lg border border-border bg-muted/30 px-4 py-3">
-            Oferta jest podzielona na dni — każdy dzień ma własne pole „Wydarzenie” w swojej karcie. Pierwszy dzień jest też zsynchronizowany z nagłówkiem zamówienia (data / kwoty w panelu).
-          </p>
-        )}
 
-        {/* Panel wyszukiwania katalogu — kontekst: który dzień / zwykła lista */}
-        {addPanel.open && !configuringProduct && (
+        {/* Panel wyszukiwania katalogu */}
+        {addPanelOpen && !configuringProduct && (
           <Card className="border-primary/40 bg-primary/5">
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between gap-2">
-                <CardTitle className="text-sm font-medium">{addPanelLabel()}</CardTitle>
-                <Button variant="ghost" size="sm" onClick={() => setAddPanel((p) => ({ ...p, open: false }))}>
+                <CardTitle className="text-sm font-medium">Dodajesz pozycję do zamówienia</CardTitle>
+                <Button variant="ghost" size="sm" onClick={() => setAddPanelOpen(false)}>
                   <X className="w-4 h-4" />
                 </Button>
               </div>
@@ -1453,31 +1228,31 @@ const OrderEditView = ({ order, onBack, onSave }: { order: Order; onBack: () => 
           </Card>
         )}
 
-        {/* Tryb bez podziału na dni — jedna lista */}
-        {!hasDays ? (
-          <Card>
+        {/* Jedna lista pozycji */}
+        <Card>
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between gap-2">
                 <div>
                   <CardTitle className="text-base">Pozycje zamówienia</CardTitle>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Jedna lista pozycji. Aby budować ofertę dzień po dniu, użyj przycisku poniżej.
-                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">Jedna lista pozycji.</p>
                 </div>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    setAddPanel({ open: !addPanel.open, target: { mode: "single" } });
-                    if (!addPanel.open) setAddSearch("");
+                    setAddPanelOpen((o) => {
+                      const next = !o;
+                      if (next) setAddSearch("");
+                      return next;
+                    });
                   }}
                 >
-                  {addPanel.open && addPanel.target.mode === "single" ? (
+                  {addPanelOpen ? (
                     <X className="w-4 h-4 mr-1" />
                   ) : (
                     <Plus className="w-4 h-4 mr-1" />
                   )}
-                  {addPanel.open && addPanel.target.mode === "single" ? "Zamknij" : "Dodaj pozycję"}
+                  {addPanelOpen ? "Zamknij" : "Dodaj pozycję"}
                 </Button>
               </div>
             </CardHeader>
@@ -1519,270 +1294,7 @@ const OrderEditView = ({ order, onBack, onSave }: { order: Order; onBack: () => 
                 ) : null}
               </div>
             </CardContent>
-            <CardContent className="pt-0 border-t border-border">
-              <Button
-                type="button"
-                variant="secondary"
-                className="w-full sm:w-auto"
-                onClick={() => {
-                  setEditingDay({
-                    id: randomUUID(),
-                    label: "Dzień 1",
-                    eventType,
-                    date: eventDateIso,
-                    startTime: eventTimeHHMM,
-                    endTime: "",
-                    guestCount,
-                    deliveryAddress,
-                  });
-                  setDayDialogOpen(true);
-                }}
-              >
-                <Calendar className="w-4 h-4 mr-2" />
-                Podziel ofertę na dni — dodaj pierwszy dzień
-              </Button>
-            </CardContent>
           </Card>
-        ) : (
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Każdy dzień to osobna sekcja: dodajesz do niego pozycje przyciskiem „Dodaj pozycję do tego dnia”. Tak samo zobaczy klient na interaktywnej ofercie.
-            </p>
-            {eventDays.map((d, di) => {
-              const dayPrimary = rowsForDay(d.id).filter(
-                ({ item }) => !isAddonLineItem(effectiveLineItemType(item))
-              );
-              const dayAddon = rowsForDay(d.id).filter(({ item }) =>
-                isAddonLineItem(effectiveLineItemType(item))
-              );
-              const panelActive =
-                addPanel.open &&
-                addPanel.target.mode === "multi" &&
-                addPanel.target.dayId === d.id;
-              return (
-                <Card key={d.id} className="overflow-hidden border-border">
-                  <CardHeader className="pb-3 bg-muted/40 border-b border-border">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                      <div className="flex gap-3 min-w-0">
-                        <Calendar className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5" />
-                        <div className="min-w-0">
-                          <CardTitle className="text-base">
-                            {d.label?.trim() || `Dzień ${di + 1}`}
-                          </CardTitle>
-                          <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
-                            {d.eventType?.trim() ? (
-                              <p>
-                                <span className="font-medium text-foreground">Typ: </span>
-                                {d.eventType.trim()}
-                              </p>
-                            ) : null}
-                            <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                              {d.date ? <span>{d.date}</span> : null}
-                              {(d.startTime || d.endTime) && (
-                                <span className="inline-flex items-center gap-1">
-                                  <Clock className="w-3 h-3 shrink-0" />
-                                  {d.startTime}
-                                  {d.endTime ? ` – ${d.endTime}` : ""}
-                                </span>
-                              )}
-                            </p>
-                            {d.guestCount > 0 ? (
-                              <p>
-                                <span className="font-medium text-foreground">Goście: </span>
-                                {d.guestCount}
-                              </p>
-                            ) : null}
-                            {d.deliveryAddress?.trim() ? (
-                              <p className="text-[11px] leading-snug">
-                                <span className="font-medium text-foreground">Miejsce: </span>
-                                {d.deliveryAddress.trim()}
-                              </p>
-                            ) : null}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex flex-wrap gap-2 shrink-0">
-                        <Button
-                          type="button"
-                          variant="default"
-                          size="sm"
-                          onClick={() => {
-                            const nextOpen = !(
-                              addPanel.open &&
-                              addPanel.target.mode === "multi" &&
-                              addPanel.target.dayId === d.id
-                            );
-                            setAddPanel({
-                              open: nextOpen,
-                              target: { mode: "multi", dayId: d.id },
-                            });
-                            if (nextOpen) setAddSearch("");
-                          }}
-                        >
-                          <Plus className="w-4 h-4 mr-1" />
-                          {panelActive ? "Zamknij wybór" : "Dodaj pozycję do tego dnia"}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setEditingDay(d);
-                            setDayDialogOpen(true);
-                          }}
-                        >
-                          <Pencil className="w-4 h-4 mr-1" />
-                          Edytuj dzień
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="text-destructive hover:text-destructive"
-                          onClick={() => {
-                            setEventDays((prev) => prev.filter((x) => x.id !== d.id));
-                            setItems((prev) =>
-                              prev.map((it) =>
-                                it.orderEventDayId === d.id ? { ...it, orderEventDayId: null } : it
-                              )
-                            );
-                          }}
-                        >
-                          <Trash2 className="w-4 h-4 mr-1" />
-                          Usuń dzień
-                        </Button>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="pt-4 space-y-4">
-                    {dayPrimary.length === 0 && dayAddon.length === 0 ? (
-                      <p className="text-sm text-muted-foreground py-2">
-                        Brak pozycji — użyj „Dodaj pozycję do tego dnia”, żeby dodać dania z katalogu.
-                      </p>
-                    ) : null}
-                    {dayPrimary.length > 0 ? (
-                      <div>
-                        <h4 className="text-sm font-semibold text-foreground mb-2">Produkty</h4>
-                        <Table>
-                          <TableHeader>
-                            <TableRow className="hover:bg-transparent">
-                              <TableHead className="font-semibold text-foreground">Produkt</TableHead>
-                              <TableHead className="font-semibold text-foreground text-center w-32">Ilość</TableHead>
-                              <TableHead className="font-semibold text-foreground text-right w-40">Cena jedn.</TableHead>
-                              <TableHead className="font-semibold text-foreground text-right w-32">Razem</TableHead>
-                              <TableHead className="font-semibold text-foreground text-center w-24 text-xs">Oferta</TableHead>
-                              <TableHead className="w-12"></TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>{dayPrimary.map(renderEditRow)}</TableBody>
-                        </Table>
-                      </div>
-                    ) : null}
-                    {dayAddon.length > 0 ? (
-                      <div className="rounded-lg border border-border bg-muted/20 p-3">
-                        <h4 className="text-sm font-semibold text-foreground mb-2">Dodatki i usługi</h4>
-                        <Table>
-                          <TableHeader>
-                            <TableRow className="hover:bg-transparent">
-                              <TableHead className="font-semibold text-foreground">Produkt</TableHead>
-                              <TableHead className="font-semibold text-foreground text-center w-32">Ilość</TableHead>
-                              <TableHead className="font-semibold text-foreground text-right w-40">Cena jedn.</TableHead>
-                              <TableHead className="font-semibold text-foreground text-right w-32">Razem</TableHead>
-                              <TableHead className="font-semibold text-foreground text-center w-24 text-xs">Oferta</TableHead>
-                              <TableHead className="w-12"></TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>{dayAddon.map(renderEditRow)}</TableBody>
-                        </Table>
-                      </div>
-                    ) : null}
-                  </CardContent>
-                </Card>
-              );
-            })}
-
-            {unassignedRows.length > 0 ? (
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base">Bez przypisanego dnia</CardTitle>
-                  <p className="text-xs text-muted-foreground font-normal">
-                    Pozycje sprzed podziału lub po usunięciu dnia. Możesz je usunąć albo dodać je ponownie w wybranym dniu.
-                  </p>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex justify-end">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        const nextOpen = !(
-                          addPanel.open && addPanel.target.mode === "multi" && addPanel.target.dayId === null
-                        );
-                        setAddPanel({ open: nextOpen, target: { mode: "multi", dayId: null } });
-                        if (nextOpen) setAddSearch("");
-                      }}
-                    >
-                      <Plus className="w-4 h-4 mr-1" />
-                      Dodaj pozycję (bez dnia)
-                    </Button>
-                  </div>
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="hover:bg-transparent">
-                        <TableHead className="font-semibold text-foreground">Produkt</TableHead>
-                        <TableHead className="font-semibold text-foreground text-center w-32">Ilość</TableHead>
-                        <TableHead className="font-semibold text-foreground text-right w-40">Cena jedn.</TableHead>
-                        <TableHead className="font-semibold text-foreground text-right w-32">Razem</TableHead>
-                        <TableHead className="font-semibold text-foreground text-center w-24 text-xs">Oferta</TableHead>
-                        <TableHead className="w-12"></TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {unassignedRows
-                        .filter(({ item }) => !isAddonLineItem(effectiveLineItemType(item)))
-                        .map(renderEditRow)}
-                    </TableBody>
-                  </Table>
-                  {unassignedRows.some(({ item }) => isAddonLineItem(effectiveLineItemType(item))) ? (
-                    <div className="rounded-lg border border-border bg-muted/20 p-3">
-                      <h4 className="text-sm font-semibold text-foreground mb-2">Dodatki (bez dnia)</h4>
-                      <Table>
-                        <TableBody>
-                          {unassignedRows
-                            .filter(({ item }) => isAddonLineItem(effectiveLineItemType(item)))
-                            .map(renderEditRow)}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  ) : null}
-                </CardContent>
-              </Card>
-            ) : null}
-
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              onClick={() => {
-                setEditingDay({
-                  id: randomUUID(),
-                  label: `Dzień ${eventDays.length + 1}`,
-                  eventType: "",
-                  date: "",
-                  startTime: "",
-                  endTime: "",
-                  guestCount: 0,
-                  deliveryAddress: "",
-                });
-                setDayDialogOpen(true);
-              }}
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Dodaj kolejny dzień
-            </Button>
-          </div>
-        )}
 
         <Card>
           <CardHeader className="pb-2">
@@ -2334,20 +1846,7 @@ const OrdersView = () => {
           amount: updated.amountNum,
           discount: updated.discount,
           deposit: updated.deposit,
-          orderEventDays: (updated.eventDays ?? []).map((d, i) => ({
-            id: d.id,
-            label: d.label,
-            date: d.date || null,
-            startTime: d.startTime || null,
-            endTime: d.endTime || null,
-            sortOrder: i,
-            eventType: d.eventType != null && String(d.eventType).trim() ? String(d.eventType).trim() : null,
-            guestCount: typeof d.guestCount === "number" ? d.guestCount : 0,
-            deliveryAddress:
-              d.deliveryAddress != null && String(d.deliveryAddress).trim()
-                ? String(d.deliveryAddress).trim()
-                : null,
-          })),
+          orderEventDays: [],
           orderItems: updated.items.map((item) => ({
             name: item.name,
             quantity: item.quantity,
@@ -2361,7 +1860,7 @@ const OrdersView = () => {
             offerClientToggle: item.offerClientToggle === true,
             offerClientAccepted:
               item.offerClientToggle === true ? Boolean(item.offerClientAccepted) : true,
-            orderEventDayId: item.orderEventDayId ?? null,
+            orderEventDayId: null,
             subItems: (item.subItems ?? []).map((sub) => ({
               name: sub.name,
               quantity: sub.quantity,

@@ -25,23 +25,6 @@ function formatEventTimeHHMM(iso: string | null | undefined): string {
   return `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
 }
 
-/** Etykieta sesji: "Dzień N — data" lub sama data. */
-function dayLabel(d: PublicOfferDay, idx: number): string {
-  const base = d.label || `Dzień ${idx + 1}`;
-  if (!d.date) return base;
-  const dt = new Date(`${d.date}T00:00:00`);
-  const dateStr = dt.toLocaleDateString("pl-PL", { day: "numeric", month: "long" });
-  return d.label ? `${d.label} — ${dateStr}` : dateStr;
-}
-
-function dayTimeRange(d: PublicOfferDay): string | null {
-  const start = formatEventTimeHHMM(d.startTime);
-  const end = formatEventTimeHHMM(d.endTime);
-  if (!start && !end) return null;
-  if (start && end) return `${start} – ${end}`;
-  return start || end;
-}
-
 function PublicOfferImage({
   src,
   alt,
@@ -134,14 +117,6 @@ type PublicOfferDay = {
   eventType: string | null;
   guestCount: number | null;
   deliveryAddress: string | null;
-};
-
-type DayEditBlock = {
-  eventType: string;
-  guestCount: string;
-  eventDate: string;
-  eventTime: string;
-  deliveryAddress: string;
 };
 
 type PublicOfferPayload = {
@@ -286,7 +261,7 @@ const ConfigurableLineCard = ({
   const cfgLineSum = cfgQEff * item.pricePerUnit;
   const guestsN = parseGuestCountField(guestCountForSync);
   return (
-    <Card key={item.id}>
+    <Card>
       <CardHeader className="pb-2">
         <div className="flex flex-row items-start justify-between gap-4">
           <div className="flex gap-3 min-w-0 flex-1">
@@ -367,7 +342,6 @@ const OptionalLinesCard = ({
   setOptionalQtyDraft: React.Dispatch<React.SetStateAction<Record<string, string>>>;
 }) => (
   <div className="space-y-3">
-    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Dodatki i pozycje opcjonalne</p>
     {items.map((item) => {
       const q = optionalQuantities[item.id] ?? 0;
       const qEff = qtyFromDraft(optionalQtyDraft[item.id], q);
@@ -408,7 +382,6 @@ const OptionalLinesCard = ({
 
 const ReadOnlyLinesCard = ({ items }: { items: PublicOfferLine[] }) => (
   <div className="space-y-3">
-    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Pozycje ustalone</p>
     {items.map((item) => {
       const kind = offerLineKindLabel(item.itemType);
       const subs = item.subItems ?? [];
@@ -454,8 +427,6 @@ const OfferInteractive = () => {
     eventTime: "",
     deliveryAddress: "",
   });
-  /** Pola „Wydarzenie” per dzień (GET → stan formularza; PUT → dayOrderDetails). */
-  const [dayEdit, setDayEdit] = useState<Record<string, DayEditBlock>>({});
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
 
@@ -524,9 +495,6 @@ const OfferInteractive = () => {
       (data?.items ?? []).filter((i) => !isInteractiveConfigurableLine(i) && !i.offerClientToggle),
     [data]
   );
-
-  /** Czy oferta ma dni/sesje. */
-  const hasDays = (data?.days ?? []).length > 0;
 
   const showEmptyOffer = readOnlyLines.length === 0 && configurableLines.length === 0 && optionalLines.length === 0;
 
@@ -715,225 +683,21 @@ const OfferInteractive = () => {
             </Card>
           ) : null}
 
-          {/* ===== WIELODNIOWA OFERTA: akordeon per dzień ===== */}
-          {hasDays ? (
-            <div className="space-y-4">
-              {(data?.days ?? []).map((day, dayIdx) => {
-                const dayItems = (data?.items ?? []).filter(i => i.orderEventDayId === day.id);
-                const dayConfigurable = dayItems.filter(i => isInteractiveConfigurableLine(i));
-                const dayOptional = dayItems.filter(i => i.offerClientToggle && i.itemType !== "configurable");
-                const dayReadOnly = dayItems.filter(i => !isInteractiveConfigurableLine(i) && !i.offerClientToggle);
-                if (dayItems.length === 0) return null;
-                const timeRange = dayTimeRange(day);
-                return (
-                  <Card key={day.id} className="overflow-hidden">
-                    <CardHeader className="pb-3 bg-muted/30 border-b border-border">
-                      <div className="flex items-start gap-3">
-                        <div className="flex-1 min-w-0">
-                          <CardTitle className="text-base">{dayLabel(day, dayIdx)}</CardTitle>
-                          {timeRange && (
-                            <p className="text-xs text-muted-foreground mt-0.5">{timeRange}</p>
-                          )}
-                        </div>
-                        <span className="text-xs text-muted-foreground bg-background border border-border rounded-full px-2 py-0.5 shrink-0">
-                          {dayItems.length} {dayItems.length === 1 ? "pozycja" : "pozycje"}
-                        </span>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="pt-4 space-y-4">
-                      {dayConfigurable.map((item) => <ConfigurableLineCard key={item.id} item={item} selections={selections} setSelections={setSelections} configurableQuantities={configurableQuantities} setConfigurableQuantities={setConfigurableQuantities} configurableQtyDraft={configurableQtyDraft} setConfigurableQtyDraft={setConfigurableQtyDraft} orderEdit={orderEdit} />)}
-                      {dayOptional.length > 0 && <OptionalLinesCard items={dayOptional} optionalQuantities={optionalQuantities} setOptionalQuantities={setOptionalQuantities} optionalQtyDraft={optionalQtyDraft} setOptionalQtyDraft={setOptionalQtyDraft} />}
-                      {dayReadOnly.length > 0 && <ReadOnlyLinesCard items={dayReadOnly} />}
-                    </CardContent>
-                  </Card>
-                );
-              })}
-              {/* Pozycje bez przypisanego dnia */}
-              {(() => {
-                const assignedIds = new Set((data?.days ?? []).map(d => d.id));
-                const unassigned = (data?.items ?? []).filter(i => !i.orderEventDayId || !assignedIds.has(i.orderEventDayId));
-                const uConf = unassigned.filter(i => isInteractiveConfigurableLine(i));
-                const uOpt = unassigned.filter(i => i.offerClientToggle && i.itemType !== "configurable");
-                const uRO = unassigned.filter(i => !isInteractiveConfigurableLine(i) && !i.offerClientToggle);
-                if (unassigned.length === 0) return null;
-                return (
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-base">Pozostałe pozycje</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      {uConf.map((item) => <ConfigurableLineCard key={item.id} item={item} selections={selections} setSelections={setSelections} configurableQuantities={configurableQuantities} setConfigurableQuantities={setConfigurableQuantities} configurableQtyDraft={configurableQtyDraft} setConfigurableQtyDraft={setConfigurableQtyDraft} orderEdit={orderEdit} />)}
-                      {uOpt.length > 0 && <OptionalLinesCard items={uOpt} optionalQuantities={optionalQuantities} setOptionalQuantities={setOptionalQuantities} optionalQtyDraft={optionalQtyDraft} setOptionalQtyDraft={setOptionalQtyDraft} />}
-                      {uRO.length > 0 && <ReadOnlyLinesCard items={uRO} />}
-                    </CardContent>
-                  </Card>
-                );
-              })()}
-            </div>
-          ) : null}
+          {configurableLines.map((item) => (
+            <ConfigurableLineCard
+              key={item.id}
+              item={item}
+              selections={selections}
+              setSelections={setSelections}
+              configurableQuantities={configurableQuantities}
+              setConfigurableQuantities={setConfigurableQuantities}
+              configurableQtyDraft={configurableQtyDraft}
+              setConfigurableQtyDraft={setConfigurableQtyDraft}
+              guestCountForSync={orderEdit.guestCount}
+            />
+          ))}
 
-          {/* ===== OFERTA JEDNODNIOWA (bez dni) ===== */}
-          {!hasDays ? configurableLines.map((item) => {
-            const set = item.configurableSet!;
-            const sel = selections[item.id] ?? {};
-            const cfgQ = configurableQuantities[item.id] ?? Math.max(0, Number(item.quantity) || 0);
-            const cfgQEff = qtyFromDraft(configurableQtyDraft[item.id], cfgQ);
-            const cfgLineSum = cfgQEff * item.pricePerUnit;
-            const guestsN = parseGuestCountField(orderEdit.guestCount);
-            return (
-              <Card key={item.id}>
-                <CardHeader className="pb-2">
-                  <div className="flex flex-row items-start justify-between gap-4">
-                    <div className="flex gap-3 min-w-0 flex-1">
-                      <PublicOfferImage
-                        src={resolvePublicOfferImageUrl(set.imageUrl)}
-                        alt={item.name}
-                        className="h-20 w-20"
-                      />
-                      <div className="min-w-0">
-                        <CardTitle className="text-lg">{item.name}</CardTitle>
-                        {set.description ? (
-                          <p className="text-sm text-muted-foreground mt-1 leading-snug">{set.description}</p>
-                        ) : null}
-                        <p className="text-sm text-muted-foreground mt-1">
-                          {item.pricePerUnit.toFixed(2)} zł / {item.unit} × {cfgQEff} {item.unit}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-right text-sm shrink-0">
-                      <p className="font-semibold">{cfgLineSum.toFixed(2)} zł</p>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <Label className="text-sm font-medium">Ilość zestawów (porcji / osób)</Label>
-                      {guestsN > 0 ? (
-                        <button
-                          type="button"
-                          className="text-xs text-primary underline-offset-2 hover:underline"
-                          onClick={() => {
-                            setConfigurableQtyDraft(({ [item.id]: _, ...rest }) => rest);
-                            setConfigurableQuantities((prev) => ({ ...prev, [item.id]: guestsN }));
-                          }}
-                        >
-                          Ustaw jak liczba gości ({guestsN})
-                        </button>
-                      ) : null}
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Domyślnie bierzemy liczbę gości z oferty (jeśli biuro ją podało); możesz ją zmienić, np. 85 zamiast 90.
-                    </p>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <div className="flex items-center gap-1 rounded-lg border border-border bg-background p-1">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="icon"
-                          className="h-9 w-9 shrink-0"
-                          disabled={cfgQ <= 0}
-                          aria-label="Zmniejsz ilość zestawów"
-                          onClick={() => {
-                            setConfigurableQtyDraft(({ [item.id]: _, ...rest }) => rest);
-                            setConfigurableQuantities((prev) => ({
-                              ...prev,
-                              [item.id]: Math.max(0, (prev[item.id] ?? cfgQ) - 1),
-                            }));
-                          }}
-                        >
-                          <Minus className="h-4 w-4" />
-                        </Button>
-                        <Input
-                          type="text"
-                          inputMode="numeric"
-                          autoComplete="off"
-                          aria-label="Ilość zestawów"
-                          className="h-9 w-[5.5rem] text-center tabular-nums"
-                          value={configurableQtyDraft[item.id] ?? String(cfgQ)}
-                          onChange={(e) => {
-                            const digits = e.target.value.replace(/\D/g, "");
-                            setConfigurableQtyDraft((d) => ({ ...d, [item.id]: digits }));
-                          }}
-                          onBlur={() => {
-                            const raw = configurableQtyDraft[item.id];
-                            if (raw === undefined) return;
-                            const n = raw === "" ? 0 : parseInt(raw, 10);
-                            setConfigurableQuantities((prev) => ({
-                              ...prev,
-                              [item.id]: clampOfferQty(Number.isFinite(n) ? n : 0),
-                            }));
-                            setConfigurableQtyDraft(({ [item.id]: _, ...rest }) => rest);
-                          }}
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="icon"
-                          className="h-9 w-9 shrink-0"
-                          aria-label="Zwiększ ilość zestawów"
-                          onClick={() => {
-                            setConfigurableQtyDraft(({ [item.id]: _, ...rest }) => rest);
-                            setConfigurableQuantities((prev) => ({
-                              ...prev,
-                              [item.id]: Math.min(QTY_MAX, (prev[item.id] ?? cfgQ) + 1),
-                            }));
-                          }}
-                        >
-                          <Plus className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                  {set.configGroups.map((group) => (
-                    <div key={group.id} className="space-y-3 rounded-lg border border-border p-4 bg-background">
-                      <div className="flex justify-between gap-2">
-                        <Label className="text-base font-medium">{group.name}</Label>
-                        <span className="text-xs text-muted-foreground">
-                          {group.minSelections >= 1 ? "Wybierz 1" : "Opcjonalnie"}
-                        </span>
-                      </div>
-                      <RadioGroup
-                        value={sel[group.id] ?? ""}
-                        onValueChange={(v) => {
-                          setSelections((prev) => ({
-                            ...prev,
-                            [item.id]: { ...prev[item.id], [group.id]: v },
-                          }));
-                        }}
-                        className="space-y-2"
-                      >
-                        {group.options.map((opt) => (
-                          <div
-                            key={opt.id}
-                            className={cn(
-                              "flex items-center gap-3 rounded-md border border-transparent px-2 py-1.5 hover:bg-muted/50",
-                              sel[group.id] === opt.id && "border-primary/30 bg-primary/5"
-                            )}
-                          >
-                            <PublicOfferImage
-                              src={resolvePublicOfferImageUrl(opt.imageUrl ?? null)}
-                              alt={opt.name}
-                              className="h-10 w-10"
-                            />
-                            <RadioGroupItem value={opt.id} id={`${item.id}-${group.id}-${opt.id}`} />
-                            <Label
-                              htmlFor={`${item.id}-${group.id}-${opt.id}`}
-                              className="cursor-pointer flex-1 font-normal leading-snug"
-                            >
-                              {opt.name}
-                            </Label>
-                          </div>
-                        ))}
-                      </RadioGroup>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            );
-          }) : null}
-
-          {!hasDays && optionalLines.length > 0 ? (
+          {optionalLines.length > 0 ? (
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">Dodatki i pozycje opcjonalne</CardTitle>
@@ -942,96 +706,18 @@ const OfferInteractive = () => {
                 </p>
               </CardHeader>
               <CardContent className="space-y-4">
-                {optionalLines.map((item) => {
-                  const q = optionalQuantities[item.id] ?? 0;
-                  const qEff = qtyFromDraft(optionalQtyDraft[item.id], q);
-                  const lineSum = qEff * item.pricePerUnit;
-                  return (
-                    <div
-                      key={item.id}
-                      className="flex flex-col gap-3 rounded-lg border border-border p-4 bg-background sm:flex-row sm:items-center sm:justify-between"
-                    >
-                      <div className="flex gap-3 min-w-0 flex-1 items-start">
-                        <PublicOfferImage
-                          src={resolvePublicOfferImageUrl(item.imageUrl)}
-                          alt={item.name}
-                          className="h-12 w-12 shrink-0"
-                        />
-                        <div className="min-w-0">
-                          <p className="font-medium text-foreground">{item.name}</p>
-                          <p className="text-sm text-muted-foreground mt-0.5">
-                            {item.pricePerUnit.toFixed(2)} zł / {item.unit}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex flex-row items-center justify-between gap-3 sm:flex-col sm:items-end sm:justify-center">
-                        <div className="flex items-center gap-1 rounded-lg border border-border bg-muted/30 p-1">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon"
-                            className="h-9 w-9 shrink-0"
-                            disabled={q <= 0}
-                            aria-label="Zmniejsz ilość"
-                            onClick={() => {
-                              setOptionalQtyDraft(({ [item.id]: _, ...rest }) => rest);
-                              setOptionalQuantities((prev) => ({
-                                ...prev,
-                                [item.id]: Math.max(0, (prev[item.id] ?? 0) - 1),
-                              }));
-                            }}
-                          >
-                            <Minus className="h-4 w-4" />
-                          </Button>
-                          <Input
-                            type="text"
-                            inputMode="numeric"
-                            autoComplete="off"
-                            aria-label={`Ilość: ${item.name}`}
-                            className="h-9 w-[5.5rem] text-center tabular-nums"
-                            value={optionalQtyDraft[item.id] ?? String(q)}
-                            onChange={(e) => {
-                              const digits = e.target.value.replace(/\D/g, "");
-                              setOptionalQtyDraft((d) => ({ ...d, [item.id]: digits }));
-                            }}
-                            onBlur={() => {
-                              const raw = optionalQtyDraft[item.id];
-                              if (raw === undefined) return;
-                              const n = raw === "" ? 0 : parseInt(raw, 10);
-                              setOptionalQuantities((prev) => ({
-                                ...prev,
-                                [item.id]: clampOfferQty(Number.isFinite(n) ? n : 0),
-                              }));
-                              setOptionalQtyDraft(({ [item.id]: _, ...rest }) => rest);
-                            }}
-                          />
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon"
-                            className="h-9 w-9 shrink-0"
-                            aria-label="Zwiększ ilość"
-                            onClick={() => {
-                              setOptionalQtyDraft(({ [item.id]: _, ...rest }) => rest);
-                              setOptionalQuantities((prev) => ({
-                                ...prev,
-                                [item.id]: Math.min(QTY_MAX, (prev[item.id] ?? 0) + 1),
-                              }));
-                            }}
-                          >
-                            <Plus className="h-4 w-4" />
-                          </Button>
-                        </div>
-                        <span className="text-sm font-semibold tabular-nums">{lineSum.toFixed(2)} zł</span>
-                      </div>
-                    </div>
-                  );
-                })}
+                <OptionalLinesCard
+                  items={optionalLines}
+                  optionalQuantities={optionalQuantities}
+                  setOptionalQuantities={setOptionalQuantities}
+                  optionalQtyDraft={optionalQtyDraft}
+                  setOptionalQtyDraft={setOptionalQtyDraft}
+                />
               </CardContent>
             </Card>
           ) : null}
 
-          {!hasDays && readOnlyLines.length > 0 ? (
+          {readOnlyLines.length > 0 ? (
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">Pozycje w ofercie</CardTitle>
@@ -1040,47 +726,7 @@ const OfferInteractive = () => {
                 </p>
               </CardHeader>
               <CardContent className="space-y-3">
-                {readOnlyLines.map((item) => {
-                  const kind = offerLineKindLabel(item.itemType);
-                  const subs = item.subItems ?? [];
-                  return (
-                    <div
-                      key={item.id}
-                      className="rounded-lg border border-border bg-background p-4 space-y-2"
-                    >
-                      <div className="flex gap-3 items-start">
-                        <PublicOfferImage
-                          src={resolvePublicOfferImageUrl(item.imageUrl)}
-                          alt={item.name}
-                          className="h-14 w-14"
-                        />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-2 gap-y-0">
-                            {kind ? (
-                              <span className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">
-                                {kind}
-                              </span>
-                            ) : null}
-                          </div>
-                          <p className="font-medium text-foreground leading-snug">{item.name}</p>
-                          <p className="text-sm text-muted-foreground mt-0.5">
-                            {item.quantity} {item.unit} × {item.pricePerUnit.toFixed(2)} zł
-                          </p>
-                          {subs.length > 0 ? (
-                            <ul className="mt-2 text-xs text-muted-foreground space-y-0.5 border-l-2 border-primary/20 pl-3">
-                              {subs.map((s, idx) => (
-                                <li key={s.id ?? idx}>
-                                  {s.name} — {Number(s.quantity)} {s.unit}
-                                </li>
-                              ))}
-                            </ul>
-                          ) : null}
-                        </div>
-                        <span className="text-sm font-semibold shrink-0">{item.total.toFixed(2)} zł</span>
-                      </div>
-                    </div>
-                  );
-                })}
+                <ReadOnlyLinesCard items={readOnlyLines} />
               </CardContent>
             </Card>
           ) : null}
