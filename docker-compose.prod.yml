@@ -3,10 +3,13 @@
 #
 # Nadpisuje nazwę projektu z docker-compose.yml (dev: szczypta-smaku-local).
 
-name: szczypta-smaku
+name: flowdoc-demo
 
 services:
   backend:
     volumes: []
   catering:
     volumes: []
+  # W produkcji nie wystawiaj Postgresa na host — dostęp tylko z sieci Dockera.
+  postgres:
+    ports: []

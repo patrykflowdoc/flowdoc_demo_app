@@ -1,9 +1,12 @@
 {
-    email emil.k@flowdoc.pl
+    # Certyfikaty Let's Encrypt — ustaw swój adres (dostajesz maile o odnowieniu)
+    email admin@flowdoc.pl
     acme_ca https://acme-v02.api.letsencrypt.org/directory
 }
 
-app.szczyptasmaku.com {
+# Produkcja: https://demo.flowdoc.pl
+# DNS: rekord A demo → publiczny IP Droplet (DigitalOcean).
+demo.flowdoc.pl {
     handle /api/* {
         reverse_proxy backend:25044
     }
@@ -17,7 +20,7 @@ app.szczyptasmaku.com {
         reverse_proxy catering:3000 {
             header_up Connection {>Connection}
             header_up Upgrade {>Upgrade}
-            header_up Host localhost
+            header_up Host {host}
             health_uri /
             health_interval 10s
             health_timeout 3s
@@ -33,39 +36,10 @@ app.szczyptasmaku.com {
     }
 }
 
-http://159.89.29.29 {
-    handle /api/* {
-        reverse_proxy backend:25044
-    }
-    handle /admin/* {
-        reverse_proxy backend:25044
-    }
-    handle /uploads/* {
-        reverse_proxy backend:25044
-    }
-    handle {
-        reverse_proxy catering:3000 {
-            header_up Connection {>Connection}
-            header_up Upgrade {>Upgrade}
-            header_up Host localhost
-            health_uri /
-            health_interval 10s
-            health_timeout 3s
-            health_status 200
-            health_headers {
-                Host localhost
-            }
-            transport http {
-                dial_timeout 5s
-                response_header_timeout 10s
-            }
-        }
-    }
-}
-
+# Lokalny Docker (bez zewnętrznego DNS) — http://auth.localhost
 auth.localhost {
     tls internal
-    
+
     handle /admin/* {
         reverse_proxy backend:25044
     }
