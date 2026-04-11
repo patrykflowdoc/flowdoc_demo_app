@@ -18,7 +18,8 @@ export default defineConfig({
     alias: { '@': path.resolve(__dirname, '../src') },
   },
   server: {
-    port: 3000,
+    // Osobny port niż typowy 3000 — mniej kolizji z innymi projektami na jednej maszynie.
+    port: 3100,
     host: '0.0.0.0',
     open: false,
     strictPort: false,
@@ -28,11 +29,11 @@ export default defineConfig({
     ],
     proxy: {
       '/api': {
-        target: process.env.VITE_API_PROXY_TARGET || 'http://localhost:25044',
+        target: process.env.VITE_API_PROXY_TARGET || 'http://localhost:25144',
         changeOrigin: true,
       },
       '/uploads': {
-        target: process.env.VITE_API_PROXY_TARGET || 'http://localhost:25044',
+        target: process.env.VITE_API_PROXY_TARGET || 'http://localhost:25144',
         changeOrigin: true,
       },
     },

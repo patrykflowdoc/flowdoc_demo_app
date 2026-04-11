@@ -16,6 +16,7 @@ import SettingsUsersView from "@/components/admin/settings/SettingsUsersView";
 
 const Admin = () => {
   const [activeSection, setActiveSection] = useState<AdminSection>("orders");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const { isAuthenticated, loading, logout } = useAuth();
   if (loading) {
     return (
@@ -30,7 +31,13 @@ const Admin = () => {
 
   return (
     <div className="min-h-screen bg-background flex">
-      <AdminSidebar activeSection={activeSection} onSectionChange={setActiveSection} onLogout={logout} />
+      <AdminSidebar
+        activeSection={activeSection}
+        onSectionChange={setActiveSection}
+        onLogout={logout}
+        collapsed={sidebarCollapsed}
+        onToggleCollapsed={() => setSidebarCollapsed((c) => !c)}
+      />
       <main className="flex-1 p-8 overflow-auto">
         {activeSection === "orders" && <OrdersView />}
         {activeSection === "clients" && <ClientsView />}

@@ -2,6 +2,7 @@
  * Admin API: all routes require auth; mutations require CSRF.
  * Mount at /api/admin
  */
+import crypto from "crypto";
 import { Router } from "express";
 import { z } from "zod";
 import multer from "multer";
@@ -9,6 +10,8 @@ import { prisma } from "../config/db.js";
 import { requireAuth } from "../middleware/auth.js";
 import { requireCsrf } from "../middleware/csrf.js";
 import { createOrderFromPayload } from "../services/createOrderFromPayload.js";
+import { sumContributingOrderLineTotals } from "../utils/offerOrderAmount.js";
+import { dishIdIfExists } from "../utils/dishFk.js";
 import {
   createImageMulter,
   deleteStoredUploadIfAppOwned,
@@ -308,6 +311,10 @@ const ORDER_ITEMS_INCLUDE = {
   },
 };
 
+const ORDER_EVENT_DAYS_INCLUDE = {
+  orderBy: { sortOrder: "asc" },
+};
+
 // ─── Orders (list, one, update) ───────────────────────────────────────
 /** GET /api/admin/orders */
 router.get("/orders", async (_req, res) => {
@@ -318,6 +325,7 @@ router.get("/orders", async (_req, res) => {
       deliveryZone: true,
       orderItems: ORDER_ITEMS_INCLUDE,
       orderFoodCostExtras: true,
+      orderEventDays: ORDER_EVENT_DAYS_INCLUDE,
     },
   });
   res.json(list);
@@ -332,10 +340,32 @@ router.get("/orders/:id", async (req, res) => {
       deliveryZone: true,
       orderItems: ORDER_ITEMS_INCLUDE,
       orderFoodCostExtras: true,
+      orderEventDays: ORDER_EVENT_DAYS_INCLUDE,
     },
   });
   if (!order) return res.status(404).json({ error: "Not found" });
   res.json(order);
+});
+
+/** POST /api/admin/orders/:id/offer-token — publiczny link interaktywnej oferty */
+router.post("/orders/:id/offer-token", requireCsrf, async (req, res) => {
+  const id = req.params.id;
+  const row = await prisma.order.findUnique({
+    where: { id },
+    select: { id: true, status: true },
+  });
+  if (!row) return res.status(404).json({ error: "Not found" });
+  if (row.status !== "Nowa oferta") {
+    return res.status(400).json({
+      error: "Link interaktywnej oferty jest dostępny tylko dla statusu „Nowa oferta”.",
+    });
+  }
+  const token = crypto.randomBytes(18).toString("base64url");
+  await prisma.order.update({
+    where: { id },
+    data: { publicOfferToken: token },
+  });
+  res.status(201).json({ token, publicPath: `/offer/${token}` });
 });
 
 /** POST /api/admin/orders */
@@ -355,21 +385,76 @@ router.post("/orders", requireCsrf, async (req, res) => {
     if (err instanceof Error && err.message.includes("Missing order")) {
       return res.status(400).json({ error: err.message });
     }
-    res.status(500).json({ error: "Failed to create order" });
+    const code = err && typeof err === "object" && "code" in err ? String(err.code) : "";
+    if (code === "P2003") {
+      return res.status(400).json({
+        error:
+          "Błąd powiązania z daniem w bazie (np. przestarzałe ID w katalogu). Odśwież panel i dodaj pozycję ponownie.",
+      });
+    }
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({
+      error:
+        "Nie udało się utworzyć zamówienia. Jeśli problem wraca, sprawdź logi serwera lub skontaktuj się z administratorem.",
+      detail: msg,
+    });
   }
 });
 
 /** PATCH /api/admin/orders/:id */
 router.patch("/orders/:id", requireCsrf, async (req, res) => {
   const id = req.params.id;
-  const {orderItems, orderFoodCostExtras, ...data} = req.body;
+  const {orderItems, orderFoodCostExtras, orderEventDays, ...data} = req.body;
   if (Object.keys(data).length > 0) {
     await prisma.order.update({ where: { id }, data });
   }
+
+  // Synchronize event days first so item FK references are valid
+  if (Array.isArray(orderEventDays)) {
+    await prisma.orderEventDay.deleteMany({ where: { orderId: id } });
+    for (let i = 0; i < orderEventDays.length; i++) {
+      const d = orderEventDays[i];
+      let guestCountDay = null;
+      if (d.guestCount != null && d.guestCount !== "") {
+        const n = parseInt(String(d.guestCount), 10);
+        if (Number.isFinite(n)) guestCountDay = Math.max(0, Math.min(999999, n));
+      }
+      await prisma.orderEventDay.create({
+        data: {
+          id: d.id && String(d.id).length > 10 ? String(d.id) : undefined,
+          orderId: id,
+          label: String(d.label ?? ""),
+          date: d.date ? new Date(String(d.date)) : null,
+          startTime: d.startTime ? new Date(String(d.startTime)) : null,
+          endTime: d.endTime ? new Date(String(d.endTime)) : null,
+          sortOrder: i,
+          eventType:
+            d.eventType != null && String(d.eventType).trim() ? String(d.eventType).trim() : null,
+          guestCount: guestCountDay,
+          deliveryAddress:
+            d.deliveryAddress != null && String(d.deliveryAddress).trim()
+              ? String(d.deliveryAddress).trim()
+              : null,
+        },
+      });
+    }
+  }
+
   if (Array.isArray(orderItems)) {
+    // Build map of event day IDs that now exist for this order (after upsert above)
+    const existingDayIds = new Set(
+      (await prisma.orderEventDay.findMany({ where: { orderId: id }, select: { id: true } }))
+        .map((d) => d.id)
+    );
+
     await prisma.orderItem.deleteMany({ where: { orderId: id } });
     for (let i = 0; i < orderItems.length; i++) {
       const it = orderItems[i];
+      const lineDishId = await dishIdIfExists(prisma, it.dishId);
+      const eventDayId =
+        it.orderEventDayId && existingDayIds.has(String(it.orderEventDayId))
+          ? String(it.orderEventDayId)
+          : null;
       const created = await prisma.orderItem.create({
         data: {
           orderId: id,
@@ -384,12 +469,21 @@ router.patch("/orders/:id", requireCsrf, async (req, res) => {
               ? Number(it.foodCostPerUnit)
               : 0,
           sortOrder: i,
-          dishId: it.dishId ? String(it.dishId) : null,
+          dishId: lineDishId,
+          sourceProductId:
+            it.sourceProductId && String(it.sourceProductId).trim()
+              ? String(it.sourceProductId).trim()
+              : null,
+          offerClientToggle: Boolean(it.offerClientToggle),
+          offerClientAccepted: Boolean(it.offerClientToggle)
+            ? Boolean(it.offerClientAccepted)
+            : true,
+          orderEventDayId: eventDayId,
         },
       });
       if (Array.isArray(it.subItems) && it.subItems.length > 0) {
-        await prisma.orderItemSubItem.createMany({
-          data: it.subItems.map((s) => ({
+        const subRows = await Promise.all(
+          it.subItems.map(async (s) => ({
             orderItemId: created.id,
             name: String(s.name),
             quantity: numOrAdminOrder(s.quantity, 0),
@@ -399,11 +493,24 @@ router.patch("/orders/:id", requireCsrf, async (req, res) => {
             converter: numOrAdminOrder(s.converter, 1),
             optionConverter: numOrAdminOrder(s.optionConverter, 1),
             groupConverter: numOrAdminOrder(s.groupConverter, 1),
-            dishId: s.dishId ? String(s.dishId) : null,
-          })),
-        });
+            dishId: await dishIdIfExists(prisma, s.dishId),
+          }))
+        );
+        await prisma.orderItemSubItem.createMany({ data: subRows });
       }
     }
+
+    const lines = await prisma.orderItem.findMany({
+      where: { orderId: id },
+      orderBy: { sortOrder: "asc" },
+    });
+    const ordRow = await prisma.order.findUnique({
+      where: { id },
+      select: { discount: true },
+    });
+    const disc = numOrAdminOrder(ordRow?.discount, 0);
+    const newAmount = Math.max(0, sumContributingOrderLineTotals(lines) - disc);
+    await prisma.order.update({ where: { id }, data: { amount: newAmount } });
   }
 
   if (Array.isArray(orderFoodCostExtras)) {

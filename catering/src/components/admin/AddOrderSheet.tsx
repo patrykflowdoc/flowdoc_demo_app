@@ -30,11 +30,9 @@ import {
   User,
   X,
 } from "lucide-react";
-import type { DbClient, Order, OrderItem } from "@/types/orders";
+import type { DbClient, OrderItem } from "@/types/orders";
 import { OrderLineDishContents } from "./ProductTable";
 import { useAdminEventTypes, SubItemSelector, type CatalogProduct, useCatalogProducts } from "./OrderCatalogPicker";
-import { mapAdminApiOrderToOrder } from "@/lib/adminOrderViewMap";
-import { formatOrderTime, formatOrderDate } from "@/components/admin/OrdersView";
 import { includesDeliveryFee, isOffPremiseCatering, type CateringType } from "@/lib/pricing";
 const fmtNum = (n: number) => n.toLocaleString("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -46,13 +44,12 @@ function mapItemType(type?: string) {
 export const AddOrderSheet = ({
   open,
   onClose,
-  onCreated,
-  onRefresh,
+  onSuccess,
 }: {
   open: boolean;
   onClose: () => void;
-  onCreated: (order: Order) => void;
-  onRefresh?: () => Promise<void>;
+  /** Po udanym zapisie — odśwież listę z API (np. reset filtrów + fetch). */
+  onSuccess?: () => void | Promise<void>;
 }) => {
   const [clientSearch, setClientSearch] = useState("");
   const [dbClients, setDbClients] = useState<DbClient[]>([]);
@@ -252,7 +249,8 @@ export const AddOrderSheet = ({
         total: product.defaultPrice,
         type: product.type,
         itemType: mapItemType(product.type),
-        dishId: product.id,
+        // Tylko dania mają wpis w tabeli Dish — extra/service mają inne ID (FK by się wywaliło).
+        dishId: product.type === "simple" ? product.id : undefined,
         subItems: null,
       },
     ]);
@@ -273,10 +271,7 @@ export const AddOrderSheet = ({
         total: configuringProduct.defaultPrice,
         type: configuringProduct.type,
         itemType: mapItemType(configuringProduct.type),
-        dishId:
-          configuringProduct.type === "simple" || configuringProduct.type === "extra"
-            ? configuringProduct.id
-            : undefined,
+        dishId: configuringProduct.type === "simple" ? configuringProduct.id : undefined,
         subItems: subItems ?? null,
       },
     ]);
@@ -328,10 +323,6 @@ export const AddOrderSheet = ({
   };
 
   const handleSubmit = async () => {
-    if (!clientName.trim()) {
-      toast.error("Podaj dane klienta");
-      return;
-    }
     if (items.length === 0) {
       toast.error("Dodaj przynajmniej jedną pozycję");
       return;
@@ -340,13 +331,14 @@ export const AddOrderSheet = ({
     const totalPrice = totalAmount + effectiveDeliveryCost;
     const deposit = Number((totalPrice * 0.1).toFixed(2));
     const orderNotes = [notes? `${notes}` : ""].filter(Boolean).join("\n");
+    const resolvedContactName = clientName.trim() || "Do uzupełnienia";
 
     setIsSubmitting(true);
     try {
-      const result = await api.createAdminOrder({
+      await api.createAdminOrder({
         clientId: selectedClientId,
         order: {
-          contactName: clientName,
+          contactName: resolvedContactName,
           contactEmail: clientEmail,
           contactPhone: clientPhone,
           contactCity:
@@ -381,6 +373,7 @@ export const AddOrderSheet = ({
           itemType: mapItemType(item.itemType ?? item.type),
           foodCostPerUnit: item.foodCostPerUnit ?? 0,
           dishId: item.dishId ?? (item.type === "simple" ? item.id : undefined),
+          sourceProductId: item.id,
           subItems: (item.subItems ?? []).map((sub) => ({
             name: sub.name,
             quantity: sub.quantity,
@@ -395,13 +388,7 @@ export const AddOrderSheet = ({
         })),
       });
 
-      try {
-        const dbOrder = await api.getAdminOrder(result.orderId);
-        const mapped = mapAdminApiOrderToOrder(dbOrder, formatOrderDate, formatOrderTime, fmtNum);
-        onCreated(mapped);
-      } catch {
-        if (onRefresh) await onRefresh();
-      }
+      if (onSuccess) await onSuccess();
 
       toast.success("Zamówienie dodane");
       resetForm();

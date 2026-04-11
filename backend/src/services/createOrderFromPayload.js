@@ -1,8 +1,25 @@
 import { sendOrderPlacedAdminEmail, sendOrderPlacedClientEmail } from "../utils/mail.js";
+import { dishIdIfExists } from "../utils/dishFk.js";
 
 function numOr(value, fallback = 0) {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
+}
+
+function coerceOrderItemQuantity(raw) {
+  const n = parseInt(String(raw ?? 1), 10);
+  if (!Number.isFinite(n) || n < 1) return 1;
+  return Math.min(n, 999999);
+}
+
+function coerceUnit(raw) {
+  const s = raw != null ? String(raw).trim() : "";
+  return s || "szt.";
+}
+
+function coerceItemType(raw) {
+  const s = raw != null ? String(raw).trim() : "";
+  return s || "simple";
 }
 
 function buildOrderNumber(now) {
@@ -140,11 +157,12 @@ export async function createOrderFromPayload(
     eventTime =
       Number.isFinite(h) && Number.isFinite(m) ? new Date(Date.UTC(1970, 0, 1, h, m, 0)) : null;
   }
+  const amountSafe = Math.max(0, numOr(totalPrice, 0));
   const created = await prisma.order.create({
     data: {
       orderNumber,
       status,
-      amount: Number(totalPrice),
+      amount: amountSafe,
       cateringType: normalizeCateringType(order.cateringType),
       clientId,
       clientName: order.contactName ?? "",
@@ -165,44 +183,54 @@ export async function createOrderFromPayload(
       deliveryCost: Number(order.deliveryPrice ?? 0),
       paymentMethod: order.paymentMethod ?? "",
       notes: order.notes ?? "",
-      deposit: order.deposit,
-      bail: order.bail,
+      deposit: order.deposit != null ? numOr(order.deposit, 0) : 0,
+      bail: order.bail != null ? numOr(order.bail, 0) : 0,
     },
   });
 
   if (orderItems.length > 0) {
     for (let idx = 0; idx < orderItems.length; idx += 1) {
       const item = orderItems[idx];
+      const lineDishId = await dishIdIfExists(prisma, item.dishId);
       const createdItem = await prisma.orderItem.create({
         data: {
           orderId: created.id,
-          name: String(item.name),
-          quantity: Number(item.quantity),
-          unit: item.unit,
-          pricePerUnit: Number(item.pricePerUnit),
-          total: Number(item.total),
-          itemType: item.itemType,
+          name: String(item.name ?? ""),
+          quantity: coerceOrderItemQuantity(item.quantity),
+          unit: coerceUnit(item.unit),
+          pricePerUnit: Math.max(0, numOr(item.pricePerUnit, 0)),
+          total: Math.max(0, numOr(item.total, 0)),
+          itemType: coerceItemType(item.itemType),
           foodCostPerUnit: item.foodCostPerUnit != null ? Number(item.foodCostPerUnit) : 0,
           sortOrder: idx,
-          dishId: item.dishId ? String(item.dishId) : null,
+          dishId: lineDishId,
+          sourceProductId:
+            item.sourceProductId && String(item.sourceProductId).trim()
+              ? String(item.sourceProductId).trim()
+              : null,
+          offerClientToggle: Boolean(item.offerClientToggle),
+          offerClientAccepted: Boolean(item.offerClientToggle)
+            ? Boolean(item.offerClientAccepted)
+            : true,
         },
       });
 
       if (Array.isArray(item.subItems) && item.subItems.length > 0) {
-        await prisma.orderItemSubItem.createMany({
-          data: item.subItems.map((sub) => ({
+        const subRows = await Promise.all(
+          item.subItems.map(async (sub) => ({
             orderItemId: createdItem.id,
-            name: String(sub.name),
+            name: String(sub.name ?? ""),
             quantity: numOr(sub.quantity, 0),
-            unit: sub.unit,
+            unit: coerceUnit(sub.unit),
             converter: numOr(sub.converter, 1),
             optionConverter: numOr(sub.optionConverter, 1),
             groupConverter: numOr(sub.groupConverter, 1),
             foodCostPerUnit: numOr(sub.foodCostPerUnit, 0),
             pricePerUnit: numOr(sub.pricePerUnit, 0),
-            dishId: sub.dishId ? String(sub.dishId) : null,
-          })),
-        });
+            dishId: await dishIdIfExists(prisma, sub.dishId),
+          }))
+        );
+        await prisma.orderItemSubItem.createMany({ data: subRows });
       }
     }
   }

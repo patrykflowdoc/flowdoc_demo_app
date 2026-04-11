@@ -122,15 +122,33 @@ export const useAdminEventTypes = () => {
 
 export const SubItemSelector = ({
   product,
+  initialSelections,
   onConfirm,
   onCancel,
 }: {
   product: CatalogProduct;
+  /** Prefill: groupId → opcja(e) lub variantId → ilość */
+  initialSelections?: Record<string, string | string[]> | Record<string, number>;
   onConfirm: (subItems: OrderSubItem[]) => void;
   onCancel: () => void;
 }) => {
-  const [selectedVariants, setSelectedVariants] = useState<Record<string, number>>({});
-  const [selectedOptions, setSelectedOptions] = useState<Record<string, string[]>>({});
+  const [selectedVariants, setSelectedVariants] = useState<Record<string, number>>(() => {
+    if (!initialSelections) return {};
+    const out: Record<string, number> = {};
+    for (const [k, v] of Object.entries(initialSelections)) {
+      if (typeof v === "number") out[k] = v;
+    }
+    return out;
+  });
+  const [selectedOptions, setSelectedOptions] = useState<Record<string, string[]>>(() => {
+    if (!initialSelections) return {};
+    const out: Record<string, string[]> = {};
+    for (const [k, v] of Object.entries(initialSelections)) {
+      if (typeof v === "string") out[k] = [v];
+      else if (Array.isArray(v)) out[k] = v as string[];
+    }
+    return out;
+  });
 
   if (product.type === "bundle" && product.variants) {
     const handleConfirm = () => {
@@ -217,12 +235,12 @@ export const SubItemSelector = ({
       }
       onConfirm(subs);
     };
-    const allGroupsSatisfied = product.optionGroups.every(
-      (g) => (selectedOptions[g.id] || []).length >= g.minSelections
-    );
     return (
       <div className="p-3 rounded-lg border border-primary/30 bg-primary/5 space-y-3 mt-2">
         <p className="text-sm font-semibold text-foreground">Konfiguruj: {product.name}</p>
+        <p className="text-xs text-muted-foreground">
+          Możesz dodać zestaw bez wyboru opcji — klient uzupełni je na stronie interaktywnej oferty.
+        </p>
         {product.optionGroups.map((g) => (
           <div key={g.id}>
             <p className="text-xs font-medium text-muted-foreground mb-1">
@@ -250,7 +268,7 @@ export const SubItemSelector = ({
           </div>
         ))}
         <div className="flex gap-2 pt-1">
-          <Button size="sm" onClick={handleConfirm} disabled={!allGroupsSatisfied}>
+          <Button size="sm" onClick={handleConfirm}>
             <Check className="w-3 h-3 mr-1" />
             Dodaj
           </Button>

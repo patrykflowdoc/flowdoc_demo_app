@@ -32,6 +32,18 @@ export function effectiveLineItemType(item: { itemType?: string; type?: string }
   return normalizeItemType(item.itemType ?? item.type);
 }
 
+/** Kwota oferty / publicznej strony: pozycja z przełącznikiem klienta wlicza się tylko po akceptacji. */
+export function offerLineContributesToTotal(item: {
+  itemType?: string;
+  type?: string;
+  offerClientToggle?: boolean;
+  offerClientAccepted?: boolean;
+}): boolean {
+  if (effectiveLineItemType(item) === "configurable") return true;
+  if (!item.offerClientToggle) return true;
+  return Boolean(item.offerClientAccepted);
+}
+
 export function splitPrimaryAndAddonItems<T extends { itemType?: string; type?: string }>(
   items: T[]
 ): { primary: T[]; addons: T[] } {

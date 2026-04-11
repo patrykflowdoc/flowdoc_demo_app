@@ -46,6 +46,7 @@ export async function submitOrder(
           unit: product.unitLabel,
           itemType: "simple",
           dishId: product.id,
+          sourceProductId: product.id,
         });
       }
     }
@@ -80,6 +81,7 @@ export async function submitOrder(
         total: lineTotal,
         unit: "kpl.",
         itemType: "expandable",
+        sourceProductId: product.id,
         subItems,
       });
     }
@@ -114,6 +116,7 @@ export async function submitOrder(
           total: price * data.quantity,
           unit: "os.",
           itemType: "configurable",
+          sourceProductId: product.id,
           subItems: chosenSubItems,
         });
       }

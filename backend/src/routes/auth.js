@@ -7,10 +7,12 @@ import { generateCsrfToken } from "../lib/csrf.js";
 
 const router = Router();
 
+// Na http://localhost Secure cookies bywają odrzucane — w dev wyłączamy (produkcja: NODE_ENV=production).
+const cookieSecure = process.env.NODE_ENV === "production";
 
 const COOKIE_OPTIONS = {
   httpOnly: true,
-  secure: true,
+  secure: cookieSecure,
   sameSite: "lax",
   maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
   path: "/",
@@ -48,8 +50,9 @@ router.post("/login", async (req, res) => {
 
 /** POST /api/auth/logout */
 router.post("/logout", (_req, res) => {
-  res.clearCookie(AUTH_COOKIE_NAME, { path: "/" });
-  res.clearCookie(CSRF_COOKIE_NAME_EXPORT, { path: "/" });
+  const clearOpts = { path: "/", sameSite: "lax", secure: cookieSecure, httpOnly: true };
+  res.clearCookie(AUTH_COOKIE_NAME, clearOpts);
+  res.clearCookie(CSRF_COOKIE_NAME_EXPORT, { ...clearOpts, httpOnly: false });
   res.json({ ok: true });
 });
 

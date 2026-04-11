@@ -10,6 +10,7 @@ import ordersRoutes from "./routes/orders.js";
 import deliveryRoutes from "./routes/delivery.js";
 import stripeRoutes, { stripeWebhookHandler } from "./routes/stripe.js";
 import adminRoutes from "./routes/admin.js";
+import publicOfferRoutes from "./routes/publicOffer.js";
 import { ensureUploadRoot, UPLOAD_DIR } from "./lib/uploads.js";
 
 // Log and avoid silent exit on uncaught errors
@@ -25,7 +26,7 @@ import { ensureUploadRoot, UPLOAD_DIR } from "./lib/uploads.js";
 const app = express();
 await ensureUploadRoot();
 
-const corsOrigin = process.env.CORS_ORIGIN || "http://localhost:3000";
+const corsOrigin = process.env.CORS_ORIGIN || "http://localhost:3100";
 app.use(
   cors({
     origin: corsOrigin,
@@ -55,8 +56,9 @@ app.use("/api/orders", ordersRoutes);
 app.use("/api", deliveryRoutes);
 app.use("/api", stripeRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/public", publicOfferRoutes);
 
-const port = process.env.PORT || 25044;
+const port = process.env.PORT || 25144;
 const server = app.listen(port, () => {
   console.log(`Backend is running on port ${port}`);
   if (isSkipAuth()) {

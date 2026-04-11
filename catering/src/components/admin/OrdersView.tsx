@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useRef, type PointerEvent as ReactPointerEvent } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, type PointerEvent as ReactPointerEvent } from "react";
 import * as api from "@/api/client";
-import { Search, Eye, Pencil, Trash2, ChevronDown, ArrowLeft, FileText, X, Check, Calculator, FileDown, CookingPot, ClipboardList, Plus, Download, ChevronRight, CalendarDays } from "lucide-react";
+import { Search, Eye, Pencil, Trash2, ChevronDown, ArrowLeft, FileText, X, Check, Calculator, FileDown, CookingPot, ClipboardList, Plus, Download, ChevronRight, CalendarDays, Copy, ExternalLink, RefreshCw, Settings2, Calendar, Clock } from "lucide-react";
 import { generateOfferPdf, generateFoodCostPdf, generateKitchenPdf, generateSummaryPdf, type SummaryDocType } from "@/lib/generatePdf";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import type { LucideIcon } from "lucide-react";
@@ -20,14 +20,17 @@ import {
   effectiveLineItemType,
   isAddonLineItem,
   isFoodCostEligibleLineItem,
+  offerLineContributesToTotal,
   splitPrimaryAndAddonItems,
 } from "@/lib/orderLineItems";
+import { Switch } from "@/components/ui/switch";
 import { calculateKitchenRows } from "@/lib/templates/pdf/kitchenCalc";
 import type {
   DbClient,
   FoodCostExtra,
   Order,
   OrderDocumentType,
+  OrderEventDay,
   OrderStatus,
   OrderItem,
 } from "@/types/orders";
@@ -61,6 +64,18 @@ const docLabels: Record<OrderDocumentType, { label: string; Icon: LucideIcon }> 
 };
 
 const fmtNum = (n: number) => n.toLocaleString("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+export const formatOrderDate = (dateStr: string | null) => {
+  if (!dateStr) return "—";
+  const d = new Date(dateStr);
+  const months = ["sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paź", "lis", "gru"];
+  return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+};
+export const formatOrderTime = (timeStr: string | null) => {
+  if (!timeStr) return "—";
+  const t = new Date(timeStr).getUTCHours().toString().padStart(2, "0") + ":" + new Date(timeStr).getUTCMinutes().toString().padStart(2, "0");
+  return t;
+};
 
 const CATERING_TYPE_LABELS: Record<CateringType, string> = {
   wyjazdowy: "Catering wyjazdowy",
@@ -407,7 +422,21 @@ function orderContactStreetLine(o: Order): string {
 }
 
 // ===== ORDER DETAIL VIEW =====
-const OrderDetailView = ({ order, onBack, onEdit, onGenerateDoc, onLinkClient }: { order: Order; onBack: () => void; onEdit: () => void; onGenerateDoc: (type: OrderDocumentType) => void; onLinkClient: (orderId: string, clientId: string) => void }) => {
+const OrderDetailView = ({
+  order,
+  onBack,
+  onEdit,
+  onGenerateDoc,
+  onLinkClient,
+  onRefreshOrder,
+}: {
+  order: Order;
+  onBack: () => void;
+  onEdit: () => void;
+  onGenerateDoc: (type: OrderDocumentType) => void;
+  onLinkClient: (orderId: string, clientId: string) => void;
+  onRefreshOrder: () => Promise<void>;
+}) => {
   const [showClientSearch, setShowClientSearch] = useState(false);
   const [clientSearch, setClientSearch] = useState("");
   const [dbClients, setDbClients] = useState<DbClient[]>([]);
@@ -420,6 +449,7 @@ const OrderDetailView = ({ order, onBack, onEdit, onGenerateDoc, onLinkClient }:
   const [newNip, setNewNip] = useState(order.companyNip?.trim() ?? "");
   const [newAddressLine, setNewAddressLine] = useState(orderContactStreetLine(order));
   const [newCity, setNewCity] = useState(order.contactCity?.trim() ?? "");
+  const [offerLinkBusy, setOfferLinkBusy] = useState(false);
 
   useEffect(() => {
     setNewFirstName(order.client.split(" ")[0] || "");
@@ -523,8 +553,90 @@ const OrderDetailView = ({ order, onBack, onEdit, onGenerateDoc, onLinkClient }:
         </Button>
       </div>
 
-        {/* CLIENT DETAILS */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="flex flex-col lg:flex-row gap-6 items-start">
+        {/* Środek: oferta / pozycje */}
+        <div className="w-full min-w-0 flex-1 order-1">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Pozycje zamówienia</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-6">
+                <div>
+                  <h4 className="text-sm font-semibold text-foreground mb-2">Produkty</h4>
+                  <ProductTable items={detailPrimary} />
+                </div>
+                {detailAddons.length > 0 ? (
+                  <div className="rounded-lg border border-border bg-muted/20 p-3">
+                    <h4 className="text-sm font-semibold text-foreground mb-2">Dodatki i usługi</h4>
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="hover:bg-transparent">
+                          <TableHead className="font-semibold text-foreground">Produkt</TableHead>
+                          <TableHead className="font-semibold text-foreground text-center">Ilość</TableHead>
+                          <TableHead className="font-semibold text-foreground text-right">Cena jedn.</TableHead>
+                          <TableHead className="font-semibold text-foreground text-right">Razem</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {detailAddons.map((item, i) => (
+                          <TableRow key={i}>
+                            <TableCell className="font-medium">
+                              <div>{item.name}</div>
+                              <OrderLineDishContents contents={item.dish?.contents} />
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {item.quantity} {item.unit}
+                            </TableCell>
+                            <TableCell className="text-right text-muted-foreground">
+                              {item.pricePerUnit.toFixed(2)} zł
+                            </TableCell>
+                            <TableCell className="text-right font-semibold">{item.total.toFixed(2)} zł</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ) : null}
+                <Table>
+                  <TableBody>
+                    <TableRow className="hover:bg-transparent border-t-2">
+                      <TableCell colSpan={3} className="text-right font-semibold text-foreground">
+                        {order.discount > 0 ? "Suma pozycji:" : "Suma:"}
+                      </TableCell>
+                      <TableCell className="text-right font-semibold text-foreground">
+                        {order.discount > 0
+                          ? `${fmtNum(order.items.reduce((s, i) => s + i.total, 0))} zł`
+                          : order.amount}
+                      </TableCell>
+                    </TableRow>
+                    {order.discount > 0 && (
+                      <>
+                        <TableRow className="hover:bg-transparent">
+                          <TableCell colSpan={3} className="text-right font-semibold text-destructive">
+                            Rabat:
+                          </TableCell>
+                          <TableCell className="text-right font-semibold text-destructive">
+                            -{fmtNum(order.discount)} zł
+                          </TableCell>
+                        </TableRow>
+                        <TableRow className="hover:bg-transparent">
+                          <TableCell colSpan={3} className="text-right font-bold text-foreground text-base">
+                            Do zapłaty:
+                          </TableCell>
+                          <TableCell className="text-right font-bold text-primary text-lg">{order.amount}</TableCell>
+                        </TableRow>
+                      </>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Prawy panel: klient, wydarzenie, podsumowanie + szkielet */}
+        <div className="w-full lg:w-[min(380px,calc(100vw-2rem))] shrink-0 space-y-4 order-2 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto">
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
@@ -631,72 +743,248 @@ const OrderDetailView = ({ order, onBack, onEdit, onGenerateDoc, onLinkClient }:
             )}
           </CardContent>
         </Card>
-      </div>
 
-      <Card className="mt-6">
-        <CardHeader className="pb-3"><CardTitle className="text-base">Pozycje zamówienia</CardTitle></CardHeader>
-        <CardContent>
-          <div className="space-y-6">
-            <div>
-              <h4 className="text-sm font-semibold text-foreground mb-2">Produkty</h4>
-              <ProductTable items={detailPrimary} />
-            </div>
-            {detailAddons.length > 0 ? (
-              <div className="rounded-lg border border-border bg-muted/20 p-3">
-                <h4 className="text-sm font-semibold text-foreground mb-2">Dodatki i usługi</h4>
-                <Table>
-                  <TableHeader>
-                    <TableRow className="hover:bg-transparent">
-                      <TableHead className="font-semibold text-foreground">Produkt</TableHead>
-                      <TableHead className="font-semibold text-foreground text-center">Ilość</TableHead>
-                      <TableHead className="font-semibold text-foreground text-right">Cena jedn.</TableHead>
-                      <TableHead className="font-semibold text-foreground text-right">Razem</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {detailAddons.map((item, i) => (
-                      <TableRow key={i}>
-                        <TableCell className="font-medium">
-                          <div>{item.name}</div>
-                          <OrderLineDishContents contents={item.dish?.contents} />
-                        </TableCell>
-                        <TableCell className="text-center">{item.quantity} {item.unit}</TableCell>
-                        <TableCell className="text-right text-muted-foreground">{item.pricePerUnit.toFixed(2)} zł</TableCell>
-                        <TableCell className="text-right font-semibold">{item.total.toFixed(2)} zł</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            ) : null}
-            <Table>
-              <TableBody>
-                <TableRow className="hover:bg-transparent border-t-2">
-                  <TableCell colSpan={3} className="text-right font-semibold text-foreground">
-                    {order.discount > 0 ? "Suma pozycji:" : "Suma:"}
-                  </TableCell>
-                  <TableCell className="text-right font-semibold text-foreground">
-                    {order.discount > 0 ? `${fmtNum(order.items.reduce((s, i) => s + i.total, 0))} zł` : order.amount}
-                  </TableCell>
-                </TableRow>
-                {order.discount > 0 && (
-                  <>
-                    <TableRow className="hover:bg-transparent">
-                      <TableCell colSpan={3} className="text-right font-semibold text-destructive">Rabat:</TableCell>
-                      <TableCell className="text-right font-semibold text-destructive">-{fmtNum(order.discount)} zł</TableCell>
-                    </TableRow>
-                    <TableRow className="hover:bg-transparent">
-                      <TableCell colSpan={3} className="text-right font-bold text-foreground text-base">Do zapłaty:</TableCell>
-                      <TableCell className="text-right font-bold text-primary text-lg">{order.amount}</TableCell>
-                    </TableRow>
-                  </>
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Podsumowanie finansowe</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm text-muted-foreground">
+              <p>Szkielet: suma częściowa, zadatek, zapłacono, pozostało do zapłaty — w kolejnej iteracji.</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Interaktywna oferta (link dla klienta)</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {order.status === "Nowa oferta" ? (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    Klient otwiera stronę bez logowania i zapisuje wybory w menu (zestawy konfigurowalne). Link jest
+                    trudny do zgadnięcia — udostępnij go tylko zainteresowanej osobie.
+                  </p>
+                  {order.publicOfferToken ? (
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap gap-2 items-center">
+                        <code className="text-xs bg-muted px-2 py-1 rounded break-all flex-1 min-w-0">
+                          {`${typeof window !== "undefined" ? window.location.origin : ""}/offer/${order.publicOfferToken}`}
+                        </code>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="shrink-0"
+                          onClick={async () => {
+                            const url = `${window.location.origin}/offer/${order.publicOfferToken}`;
+                            await navigator.clipboard.writeText(url);
+                            toast.success("Skopiowano link");
+                          }}
+                        >
+                          <Copy className="w-4 h-4 mr-1" />
+                          Kopiuj
+                        </Button>
+                        <Button type="button" variant="outline" size="sm" className="shrink-0" asChild>
+                          <a href={`/offer/${order.publicOfferToken}`} target="_blank" rel="noreferrer">
+                            <ExternalLink className="w-4 h-4 mr-1" />
+                            Otwórz
+                          </a>
+                        </Button>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-xs"
+                        disabled={offerLinkBusy}
+                        onClick={async () => {
+                          setOfferLinkBusy(true);
+                          try {
+                            await api.createOfferPublicLink(order.dbId);
+                            await onRefreshOrder();
+                            toast.success("Wygenerowano nowy link — poprzedni przestaje działać.");
+                          } catch {
+                            toast.error("Nie udało się wygenerować linku");
+                          } finally {
+                            setOfferLinkBusy(false);
+                          }
+                        }}
+                      >
+                        Wygeneruj nowy link (unieważni stary)
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={offerLinkBusy}
+                      onClick={async () => {
+                        setOfferLinkBusy(true);
+                        try {
+                          await api.createOfferPublicLink(order.dbId);
+                          await onRefreshOrder();
+                          toast.success("Link do interaktywnej oferty został utworzony.");
+                        } catch {
+                          toast.error("Nie udało się utworzyć linku");
+                        } finally {
+                          setOfferLinkBusy(false);
+                        }
+                      }}
+                    >
+                      Wygeneruj link dla klienta
+                    </Button>
+                  )}
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Link interaktywnej oferty jest dostępny tylko przy statusie „Nowa oferta”.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
+  );
+};
+
+// ===== ADD/EDIT SESSION DIALOG (jak karta „Wydarzenie” + kontekst dnia) =====
+type EventDayForm = {
+  id: string;
+  label: string;
+  eventType: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  guestCount: number;
+  deliveryAddress: string;
+};
+
+const EventDayDialog = ({
+  open,
+  initial,
+  isEdit,
+  onSave,
+  onClose,
+}: {
+  open: boolean;
+  initial: EventDayForm | null;
+  /** true gdy edytujemy istniejący wpis z listy dni (nie pierwsze otwarcie „nowego” ID). */
+  isEdit: boolean;
+  onSave: (d: EventDayForm) => void;
+  onClose: () => void;
+}) => {
+  const [label, setLabel] = useState(initial?.label ?? "");
+  const [eventType, setEventType] = useState(initial?.eventType ?? "");
+  const [date, setDate] = useState(initial?.date ?? "");
+  const [startTime, setStartTime] = useState(initial?.startTime ?? "");
+  const [endTime, setEndTime] = useState(initial?.endTime ?? "");
+  const [guestCount, setGuestCount] = useState(initial?.guestCount ?? 0);
+  const [deliveryAddress, setDeliveryAddress] = useState(initial?.deliveryAddress ?? "");
+
+  useEffect(() => {
+    if (open) {
+      setLabel(initial?.label ?? "");
+      setEventType(initial?.eventType ?? "");
+      setDate(initial?.date ?? "");
+      setStartTime(initial?.startTime ?? "");
+      setEndTime(initial?.endTime ?? "");
+      setGuestCount(initial?.guestCount ?? 0);
+      setDeliveryAddress(initial?.deliveryAddress ?? "");
+    }
+  }, [open, initial]);
+
+  const handleSave = () => {
+    if (!date) return;
+    onSave({
+      id: initial?.id ?? randomUUID(),
+      label,
+      eventType,
+      date,
+      startTime,
+      endTime,
+      guestCount,
+      deliveryAddress,
+    });
+    onClose();
+  };
+
+  return (
+    <Sheet open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
+        <SheetHeader>
+          <SheetTitle>{isEdit ? "Edytuj dzień wydarzenia" : "Nowy dzień wydarzenia"}</SheetTitle>
+          <p className="text-sm text-muted-foreground font-normal text-left">
+            Te same pola co przy pojedynczej ofercie — do tego dnia przypiszesz pozycje poniżej w panelu.
+          </p>
+        </SheetHeader>
+        <div className="mt-6 space-y-5">
+          <div className="space-y-2">
+            <Label htmlFor="day-label">Nazwa dnia / sesji (opcjonalnie)</Label>
+            <Input
+              id="day-label"
+              placeholder="np. Dzień 1 — kolacja"
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="day-event-type">Typ wydarzenia</Label>
+            <Input
+              id="day-event-type"
+              placeholder="np. Komunia, Wesele"
+              value={eventType}
+              onChange={(e) => setEventType(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="day-date">
+              Data <span className="text-destructive">*</span>
+            </Label>
+            <Input id="day-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="day-start">Godzina</Label>
+              <Input id="day-start" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="day-end">Godzina koniec (opcjonalnie)</Label>
+              <Input id="day-end" type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="day-guests">Liczba gości</Label>
+            <Input
+              id="day-guests"
+              type="number"
+              min={0}
+              inputMode="numeric"
+              placeholder="np. 70"
+              value={guestCount || ""}
+              onChange={(e) => setGuestCount(Math.max(0, parseInt(e.target.value, 10) || 0))}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="day-delivery">Miejsce / adres dostawy</Label>
+            <Input
+              id="day-delivery"
+              placeholder="Adres lub opis miejsca"
+              value={deliveryAddress}
+              onChange={(e) => setDeliveryAddress(e.target.value)}
+            />
+          </div>
+          <div className="flex gap-3 pt-2">
+            <Button onClick={handleSave} disabled={!date} className="flex-1">
+              <Check className="w-4 h-4 mr-1" />
+              Zapisz dzień
+            </Button>
+            <Button variant="outline" onClick={onClose} className="flex-1">
+              Anuluj
+            </Button>
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 };
 
@@ -705,12 +993,44 @@ const OrderEditView = ({ order, onBack, onSave }: { order: Order; onBack: () => 
   const [status, setStatus] = useState<OrderStatus>(order.status);
   const [notes, setNotes] = useState(order.notes);
   const [deliveryAddress, setDeliveryAddress] = useState(order.deliveryAddress);
+  const [eventType, setEventType] = useState(order.event);
+  const [eventDateIso, setEventDateIso] = useState(order.eventDateIso ?? "");
+  const [eventTimeHHMM, setEventTimeHHMM] = useState(order.eventTimeHHMM ?? "");
+  const [guestCount, setGuestCount] = useState(order.guestCount);
   const [items, setItems] = useState<OrderItem[]>(order.items.map(i => ({ ...i })));
   const [discount, setDiscount] = useState(order.discount || 0);
-  const [showAddProduct, setShowAddProduct] = useState(false);
+  /** single = jedna lista bez dni; multi + dayId = nowa pozycja trafia do wybranego dnia (null = „bez dnia”) */
+  type AddPanelTarget = { mode: "single" } | { mode: "multi"; dayId: string | null };
+  const [addPanel, setAddPanel] = useState<{ open: boolean; target: AddPanelTarget }>({
+    open: false,
+    target: { mode: "single" },
+  });
   const [addSearch, setAddSearch] = useState("");
   const [configuringProduct, setConfiguringProduct] = useState<CatalogProduct | null>(null);
+  // index pozycji, której edytujemy subItems (dla zestawów konfigurowalnych)
+  const [editingSubItemsIndex, setEditingSubItemsIndex] = useState<number | null>(null);
+  // Dni wydarzenia
+  const [eventDays, setEventDays] = useState<EventDayForm[]>(
+    (order.eventDays ?? []).map((d) => ({
+      id: d.id,
+      label: d.label,
+      eventType: d.eventType ?? "",
+      date: d.date ?? "",
+      startTime: d.startTime ? new Date(d.startTime).toISOString().slice(11, 16) : "",
+      endTime: d.endTime ? new Date(d.endTime).toISOString().slice(11, 16) : "",
+      guestCount: d.guestCount ?? 0,
+      deliveryAddress: d.deliveryAddress ?? "",
+    }))
+  );
+  const [dayDialogOpen, setDayDialogOpen] = useState(false);
+  const [editingDay, setEditingDay] = useState<EventDayForm | null>(null);
+
   const catalogProducts = useCatalogProducts();
+
+  const orderEventDayIdForNewLine = (): string | null => {
+    if (addPanel.target.mode === "single") return null;
+    return addPanel.target.dayId;
+  };
 
   const updateItem = (index: number, field: "quantity" | "pricePerUnit", value: number) => {
     setItems(prev => prev.map((item, i) => {
@@ -725,41 +1045,115 @@ const OrderEditView = ({ order, onBack, onSave }: { order: Order; onBack: () => 
     setItems(prev => prev.filter((_, i) => i !== index));
   };
 
+  const setOfferClientToggleRow = (index: number, enabled: boolean) => {
+    setItems((prev) =>
+      prev.map((item, i) => {
+        if (i !== index) return item;
+        if (effectiveLineItemType(item) === "configurable") return item;
+        if (!enabled) return { ...item, offerClientToggle: false, offerClientAccepted: true };
+        return { ...item, offerClientToggle: true, offerClientAccepted: false };
+      })
+    );
+  };
+
   const addProduct = (product: CatalogProduct) => {
     if ((product.type === "bundle" && product.variants && product.variants.length > 0) ||
         (product.type === "configurable" && product.optionGroups && product.optionGroups.length > 0)) {
       setConfiguringProduct(product);
       return;
     }
+    const dayId = orderEventDayIdForNewLine();
     setItems(prev => [...prev, {
       id: product.id,
       name: product.name, quantity: 1, unit: product.unit,
       pricePerUnit: product.defaultPrice, total: product.defaultPrice, type: product.type,
+      sourceProductId: product.id,
+      orderEventDayId: dayId,
       subItems: null,
     }]);
-    setShowAddProduct(false);
+    setAddPanel((p) => ({ ...p, open: false }));
     setAddSearch("");
   };
 
   const handleSubItemConfirm = (subItems: OrderItem["subItems"]) => {
+    if (editingSubItemsIndex !== null) {
+      // Edycja istniejącej pozycji
+      setItems(prev => prev.map((item, i) =>
+        i === editingSubItemsIndex ? { ...item, subItems: subItems ?? null } : item
+      ));
+      setEditingSubItemsIndex(null);
+      return;
+    }
     if (!configuringProduct) return;
+    const dayId = orderEventDayIdForNewLine();
     setItems(prev => [...prev, {
       id: configuringProduct.id,
       name: configuringProduct.name, quantity: 1, unit: configuringProduct.unit,
       pricePerUnit: configuringProduct.defaultPrice, total: configuringProduct.defaultPrice,
-      type: configuringProduct.type, subItems: subItems ?? null,
+      type: configuringProduct.type,
+      sourceProductId: configuringProduct.id,
+      orderEventDayId: dayId,
+      subItems: subItems ?? null,
     }]);
     setConfiguringProduct(null);
-    setShowAddProduct(false);
+    setAddPanel((p) => ({ ...p, open: false }));
     setAddSearch("");
   };
 
-  const totalAmount = items.reduce((s, i) => s + i.total, 0);
+  const startEditSubItems = (index: number) => {
+    const item = items[index];
+    if (!item.sourceProductId) return;
+    const product = catalogProducts.find(p => p.id === item.sourceProductId);
+    if (!product) {
+      toast.error("Nie znaleziono zestawu w katalogu — być może został usunięty lub zmieniony. Możesz usunąć tę pozycję i dodać ją ponownie.");
+      return;
+    }
+    setEditingSubItemsIndex(index);
+    setConfiguringProduct(product);
+  };
+
+  const totalAmount = items.reduce(
+    (s, i) => s + (offerLineContributesToTotal(i) ? i.total : 0),
+    0
+  );
   const finalAmount = totalAmount - discount;
 
   const handleSave = () => {
+    const first = eventDays[0];
+    const useFirstDay = eventDays.length > 0 && first;
+    const dateIsoEff = useFirstDay ? (first.date.trim() || null) : eventDateIso.trim() || null;
+    const timeHmEff = useFirstDay ? (first.startTime.trim() || null) : eventTimeHHMM.trim() || null;
+    const dateDisplay = dateIsoEff
+      ? formatOrderDate(`${dateIsoEff}T12:00:00.000Z`)
+      : order.date;
+    const timeDisplay = timeHmEff ? timeHmEff : order.time;
+    const eventEff = useFirstDay ? first.eventType : eventType;
+    const guestsEff = useFirstDay ? first.guestCount : guestCount;
+    const addrEff = useFirstDay ? first.deliveryAddress : deliveryAddress;
     onSave({
-      ...order, status, notes, deliveryAddress, items, discount,
+      ...order,
+      status,
+      notes,
+      deliveryAddress: addrEff,
+      event: eventEff,
+      guestCount: guestsEff,
+      eventDateIso: dateIsoEff,
+      eventTimeHHMM: timeHmEff,
+      date: dateDisplay,
+      time: timeDisplay,
+      items,
+      discount,
+      eventDays: eventDays.map((d, i) => ({
+        id: d.id,
+        label: d.label,
+        date: d.date || null,
+        startTime: d.startTime ? `1970-01-01T${d.startTime}:00.000Z` : null,
+        endTime: d.endTime ? `1970-01-01T${d.endTime}:00.000Z` : null,
+        sortOrder: i,
+        eventType: d.eventType.trim() || null,
+        guestCount: d.guestCount,
+        deliveryAddress: d.deliveryAddress.trim() || null,
+      })),
       amount: fmtNum(finalAmount) + " zł",
       amountNum: finalAmount,
     });
@@ -769,12 +1163,29 @@ const OrderEditView = ({ order, onBack, onSave }: { order: Order; onBack: () => 
     p.name.toLowerCase().includes(addSearch.toLowerCase())
   );
 
-  const primaryRows = items
-    .map((item, index) => ({ item, index }))
-    .filter(({ item }) => !isAddonLineItem(effectiveLineItemType(item)));
-  const addonRows = items
-    .map((item, index) => ({ item, index }))
-    .filter(({ item }) => isAddonLineItem(effectiveLineItemType(item)));
+  const allRowsIndexed = items.map((item, index) => ({ item, index }));
+
+  const primaryRows = allRowsIndexed.filter(({ item }) => !isAddonLineItem(effectiveLineItemType(item)));
+  const addonRows = allRowsIndexed.filter(({ item }) => isAddonLineItem(effectiveLineItemType(item)));
+
+  const hasDays = eventDays.length > 0;
+
+  const dayIds = useMemo(() => new Set(eventDays.map((d) => d.id)), [eventDays]);
+
+  const rowsForDay = (dayId: string) =>
+    allRowsIndexed.filter(({ item }) => item.orderEventDayId === dayId);
+
+  const unassignedRows = allRowsIndexed.filter(
+    ({ item }) => !item.orderEventDayId || !dayIds.has(String(item.orderEventDayId))
+  );
+
+  const addPanelLabel = (): string => {
+    if (addPanel.target.mode === "single") return "Dodajesz pozycję do zamówienia";
+    if (addPanel.target.dayId === null) return "Dodajesz pozycję (bez przypisanego dnia)";
+    const d = eventDays.find((x) => x.id === addPanel.target.dayId);
+    const bits = [d?.label, d?.date].filter(Boolean);
+    return `Dodajesz do: ${bits.length ? bits.join(" — ") : "wybranego dnia"}`;
+  };
 
   const renderEditRow = ({ item, index }: { item: OrderItem; index: number }) => (
     <TableRow key={index}>
@@ -799,6 +1210,16 @@ const OrderEditView = ({ order, onBack, onSave }: { order: Order; onBack: () => 
                 ))}
               </CollapsibleContent>
             </Collapsible>
+          )}
+          {effectiveLineItemType(item) === "configurable" && item.sourceProductId && (
+            <button
+              type="button"
+              onClick={() => startEditSubItems(index)}
+              className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-0.5"
+            >
+              <Settings2 className="w-3 h-3" />
+              Edytuj wybory menu
+            </button>
           )}
         </div>
       </TableCell>
@@ -828,6 +1249,22 @@ const OrderEditView = ({ order, onBack, onSave }: { order: Order; onBack: () => 
         </div>
       </TableCell>
       <TableCell className="text-right font-semibold">{fmtNum(item.total)} zł</TableCell>
+      <TableCell className="text-center align-middle">
+        {effectiveLineItemType(item) === "configurable" ? (
+          <span className="text-xs text-muted-foreground">—</span>
+        ) : (
+          <div className="flex flex-col items-center gap-1">
+            <Switch
+              checked={item.offerClientToggle === true}
+              onCheckedChange={(v) => setOfferClientToggleRow(index, v)}
+              aria-label="Klient wybiera na stronie oferty"
+            />
+            <span className="text-[10px] text-muted-foreground leading-tight max-w-[5.5rem] text-center">
+              wybór klienta
+            </span>
+          </div>
+        )}
+      </TableCell>
       <TableCell>
         <button
           type="button"
@@ -852,27 +1289,574 @@ const OrderEditView = ({ order, onBack, onSave }: { order: Order; onBack: () => 
         </div>
       </div>
 
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      {/* Dialog dodawania/edycji dnia */}
+      <EventDayDialog
+        open={dayDialogOpen}
+        initial={editingDay}
+        isEdit={editingDay != null && eventDays.some((x) => x.id === editingDay.id)}
+        onSave={(d) => {
+          setEventDays((prev) => {
+            const exists = prev.findIndex((x) => x.id === d.id);
+            const isNew = exists < 0;
+            const next = isNew ? [...prev, d] : prev.map((x, i) => (i === exists ? d : x));
+            if (isNew && prev.length === 0) {
+              setItems((lines) => lines.map((it) => ({ ...it, orderEventDayId: d.id })));
+            }
+            return next;
+          });
+        }}
+        onClose={() => { setDayDialogOpen(false); setEditingDay(null); }}
+      />
+
+      {/* Inline SubItemSelector gdy edytujemy wybory zestawu */}
+      {configuringProduct && (
+        <div className="mb-4 p-4 rounded-lg border border-primary/30 bg-primary/5">
+          <p className="text-sm font-semibold mb-3">
+            {editingSubItemsIndex !== null ? "Edytujesz wybory:" : "Konfigurujesz:"} {configuringProduct.name}
+          </p>
+          <SubItemSelector
+            product={configuringProduct}
+            initialSelections={
+              editingSubItemsIndex !== null
+                ? (items[editingSubItemsIndex]?.subItems ?? []).reduce<Record<string, string[]>>((acc, sub) => {
+                    // Rozpakowujemy "NazwaGrupy: NazwaOpcji" → szukamy optionGroup + option
+                    for (const g of configuringProduct.optionGroups ?? []) {
+                      if (sub.name.startsWith(`${g.name}:`)) {
+                        const optName = sub.name.slice(g.name.length + 1).trim();
+                        const opt = g.options.find(o => o.name === optName);
+                        if (opt) {
+                          acc[g.id] = [...(acc[g.id] ?? []), opt.id];
+                        }
+                      }
+                    }
+                    return acc;
+                  }, {})
+                : undefined
+            }
+            onConfirm={handleSubItemConfirm}
+            onCancel={() => { setConfiguringProduct(null); setEditingSubItemsIndex(null); }}
+          />
+        </div>
+      )}
+
+      <div className="flex flex-col lg:flex-row gap-6 items-start">
+        <div className="w-full min-w-0 flex-1 space-y-4 order-1">
+
+        {!hasDays ? (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Wydarzenie</CardTitle>
+            <p className="text-sm text-muted-foreground font-normal">
+              Jedna data i miejsce — jak na interaktywnej ofercie. Gdy podzielisz ofertę na dni, szczegóły wpiszesz osobno dla każdego dnia (przycisk poniżej).
+            </p>
+          </CardHeader>
+          <CardContent className="text-sm space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="edit-event-type">Typ wydarzenia</Label>
+                <Input
+                  id="edit-event-type"
+                  placeholder="np. Komunia, Wesele"
+                  value={eventType}
+                  onChange={(e) => setEventType(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-event-date">Data</Label>
+                <Input
+                  id="edit-event-date"
+                  type="date"
+                  value={eventDateIso}
+                  onChange={(e) => setEventDateIso(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-event-time">Godzina</Label>
+                <Input
+                  id="edit-event-time"
+                  type="time"
+                  value={eventTimeHHMM}
+                  onChange={(e) => setEventTimeHHMM(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="edit-guests">Liczba gości</Label>
+                <Input
+                  id="edit-guests"
+                  type="number"
+                  min={0}
+                  inputMode="numeric"
+                  placeholder="np. 70"
+                  value={guestCount || ""}
+                  onChange={(e) => setGuestCount(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="edit-delivery">Miejsce / adres dostawy</Label>
+                <Input
+                  id="edit-delivery"
+                  placeholder="Adres lub opis miejsca"
+                  value={deliveryAddress}
+                  onChange={(e) => setDeliveryAddress(e.target.value)}
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        ) : (
+          <p className="text-sm text-muted-foreground rounded-lg border border-border bg-muted/30 px-4 py-3">
+            Oferta jest podzielona na dni — każdy dzień ma własne pole „Wydarzenie” w swojej karcie. Pierwszy dzień jest też zsynchronizowany z nagłówkiem zamówienia (data / kwoty w panelu).
+          </p>
+        )}
+
+        {/* Panel wyszukiwania katalogu — kontekst: który dzień / zwykła lista */}
+        {addPanel.open && !configuringProduct && (
+          <Card className="border-primary/40 bg-primary/5">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between gap-2">
+                <CardTitle className="text-sm font-medium">{addPanelLabel()}</CardTitle>
+                <Button variant="ghost" size="sm" onClick={() => setAddPanel((p) => ({ ...p, open: false }))}>
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <div className="relative mb-3">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Szukaj produktu w katalogu…"
+                  value={addSearch}
+                  onChange={(e) => setAddSearch(e.target.value)}
+                  className="pl-9"
+                  autoFocus
+                />
+              </div>
+              <div className="max-h-56 overflow-y-auto space-y-1">
+                {filteredCatalog.map((product) => (
+                  <button
+                    key={product.id}
+                    type="button"
+                    onClick={() => addProduct(product)}
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-md text-sm hover:bg-accent transition-colors text-left"
+                  >
+                    <span className="font-medium text-foreground">{product.name}</span>
+                    <span className="text-muted-foreground text-xs">
+                      {fmtNum(product.defaultPrice)} zł / {product.unit}
+                    </span>
+                  </button>
+                ))}
+                {filteredCatalog.length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-3">Nie znaleziono produktów</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Tryb bez podziału na dni — jedna lista */}
+        {!hasDays ? (
           <Card>
-            <CardHeader className="pb-3"><CardTitle className="text-base">Status</CardTitle></CardHeader>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <CardTitle className="text-base">Pozycje zamówienia</CardTitle>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Jedna lista pozycji. Aby budować ofertę dzień po dniu, użyj przycisku poniżej.
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setAddPanel({ open: !addPanel.open, target: { mode: "single" } });
+                    if (!addPanel.open) setAddSearch("");
+                  }}
+                >
+                  {addPanel.open && addPanel.target.mode === "single" ? (
+                    <X className="w-4 h-4 mr-1" />
+                  ) : (
+                    <Plus className="w-4 h-4 mr-1" />
+                  )}
+                  {addPanel.open && addPanel.target.mode === "single" ? "Zamknij" : "Dodaj pozycję"}
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-6">
+                <div>
+                  <h4 className="text-sm font-semibold text-foreground mb-2">Produkty</h4>
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="hover:bg-transparent">
+                        <TableHead className="font-semibold text-foreground">Produkt</TableHead>
+                        <TableHead className="font-semibold text-foreground text-center w-32">Ilość</TableHead>
+                        <TableHead className="font-semibold text-foreground text-right w-40">Cena jedn.</TableHead>
+                        <TableHead className="font-semibold text-foreground text-right w-32">Razem</TableHead>
+                        <TableHead className="font-semibold text-foreground text-center w-24 text-xs">Oferta</TableHead>
+                        <TableHead className="w-12"></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>{primaryRows.map(renderEditRow)}</TableBody>
+                  </Table>
+                </div>
+                {addonRows.length > 0 ? (
+                  <div className="rounded-lg border border-border bg-muted/20 p-3">
+                    <h4 className="text-sm font-semibold text-foreground mb-2">Dodatki i usługi</h4>
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="hover:bg-transparent">
+                          <TableHead className="font-semibold text-foreground">Produkt</TableHead>
+                          <TableHead className="font-semibold text-foreground text-center w-32">Ilość</TableHead>
+                          <TableHead className="font-semibold text-foreground text-right w-40">Cena jedn.</TableHead>
+                          <TableHead className="font-semibold text-foreground text-right w-32">Razem</TableHead>
+                          <TableHead className="font-semibold text-foreground text-center w-24 text-xs">Oferta</TableHead>
+                          <TableHead className="w-12"></TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>{addonRows.map(renderEditRow)}</TableBody>
+                    </Table>
+                  </div>
+                ) : null}
+              </div>
+            </CardContent>
+            <CardContent className="pt-0 border-t border-border">
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full sm:w-auto"
+                onClick={() => {
+                  setEditingDay({
+                    id: randomUUID(),
+                    label: "Dzień 1",
+                    eventType,
+                    date: eventDateIso,
+                    startTime: eventTimeHHMM,
+                    endTime: "",
+                    guestCount,
+                    deliveryAddress,
+                  });
+                  setDayDialogOpen(true);
+                }}
+              >
+                <Calendar className="w-4 h-4 mr-2" />
+                Podziel ofertę na dni — dodaj pierwszy dzień
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Każdy dzień to osobna sekcja: dodajesz do niego pozycje przyciskiem „Dodaj pozycję do tego dnia”. Tak samo zobaczy klient na interaktywnej ofercie.
+            </p>
+            {eventDays.map((d, di) => {
+              const dayPrimary = rowsForDay(d.id).filter(
+                ({ item }) => !isAddonLineItem(effectiveLineItemType(item))
+              );
+              const dayAddon = rowsForDay(d.id).filter(({ item }) =>
+                isAddonLineItem(effectiveLineItemType(item))
+              );
+              const panelActive =
+                addPanel.open &&
+                addPanel.target.mode === "multi" &&
+                addPanel.target.dayId === d.id;
+              return (
+                <Card key={d.id} className="overflow-hidden border-border">
+                  <CardHeader className="pb-3 bg-muted/40 border-b border-border">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="flex gap-3 min-w-0">
+                        <Calendar className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5" />
+                        <div className="min-w-0">
+                          <CardTitle className="text-base">
+                            {d.label?.trim() || `Dzień ${di + 1}`}
+                          </CardTitle>
+                          <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
+                            {d.eventType?.trim() ? (
+                              <p>
+                                <span className="font-medium text-foreground">Typ: </span>
+                                {d.eventType.trim()}
+                              </p>
+                            ) : null}
+                            <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                              {d.date ? <span>{d.date}</span> : null}
+                              {(d.startTime || d.endTime) && (
+                                <span className="inline-flex items-center gap-1">
+                                  <Clock className="w-3 h-3 shrink-0" />
+                                  {d.startTime}
+                                  {d.endTime ? ` – ${d.endTime}` : ""}
+                                </span>
+                              )}
+                            </p>
+                            {d.guestCount > 0 ? (
+                              <p>
+                                <span className="font-medium text-foreground">Goście: </span>
+                                {d.guestCount}
+                              </p>
+                            ) : null}
+                            {d.deliveryAddress?.trim() ? (
+                              <p className="text-[11px] leading-snug">
+                                <span className="font-medium text-foreground">Miejsce: </span>
+                                {d.deliveryAddress.trim()}
+                              </p>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2 shrink-0">
+                        <Button
+                          type="button"
+                          variant="default"
+                          size="sm"
+                          onClick={() => {
+                            const nextOpen = !(
+                              addPanel.open &&
+                              addPanel.target.mode === "multi" &&
+                              addPanel.target.dayId === d.id
+                            );
+                            setAddPanel({
+                              open: nextOpen,
+                              target: { mode: "multi", dayId: d.id },
+                            });
+                            if (nextOpen) setAddSearch("");
+                          }}
+                        >
+                          <Plus className="w-4 h-4 mr-1" />
+                          {panelActive ? "Zamknij wybór" : "Dodaj pozycję do tego dnia"}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setEditingDay(d);
+                            setDayDialogOpen(true);
+                          }}
+                        >
+                          <Pencil className="w-4 h-4 mr-1" />
+                          Edytuj dzień
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => {
+                            setEventDays((prev) => prev.filter((x) => x.id !== d.id));
+                            setItems((prev) =>
+                              prev.map((it) =>
+                                it.orderEventDayId === d.id ? { ...it, orderEventDayId: null } : it
+                              )
+                            );
+                          }}
+                        >
+                          <Trash2 className="w-4 h-4 mr-1" />
+                          Usuń dzień
+                        </Button>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-4 space-y-4">
+                    {dayPrimary.length === 0 && dayAddon.length === 0 ? (
+                      <p className="text-sm text-muted-foreground py-2">
+                        Brak pozycji — użyj „Dodaj pozycję do tego dnia”, żeby dodać dania z katalogu.
+                      </p>
+                    ) : null}
+                    {dayPrimary.length > 0 ? (
+                      <div>
+                        <h4 className="text-sm font-semibold text-foreground mb-2">Produkty</h4>
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="hover:bg-transparent">
+                              <TableHead className="font-semibold text-foreground">Produkt</TableHead>
+                              <TableHead className="font-semibold text-foreground text-center w-32">Ilość</TableHead>
+                              <TableHead className="font-semibold text-foreground text-right w-40">Cena jedn.</TableHead>
+                              <TableHead className="font-semibold text-foreground text-right w-32">Razem</TableHead>
+                              <TableHead className="font-semibold text-foreground text-center w-24 text-xs">Oferta</TableHead>
+                              <TableHead className="w-12"></TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>{dayPrimary.map(renderEditRow)}</TableBody>
+                        </Table>
+                      </div>
+                    ) : null}
+                    {dayAddon.length > 0 ? (
+                      <div className="rounded-lg border border-border bg-muted/20 p-3">
+                        <h4 className="text-sm font-semibold text-foreground mb-2">Dodatki i usługi</h4>
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="hover:bg-transparent">
+                              <TableHead className="font-semibold text-foreground">Produkt</TableHead>
+                              <TableHead className="font-semibold text-foreground text-center w-32">Ilość</TableHead>
+                              <TableHead className="font-semibold text-foreground text-right w-40">Cena jedn.</TableHead>
+                              <TableHead className="font-semibold text-foreground text-right w-32">Razem</TableHead>
+                              <TableHead className="font-semibold text-foreground text-center w-24 text-xs">Oferta</TableHead>
+                              <TableHead className="w-12"></TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>{dayAddon.map(renderEditRow)}</TableBody>
+                        </Table>
+                      </div>
+                    ) : null}
+                  </CardContent>
+                </Card>
+              );
+            })}
+
+            {unassignedRows.length > 0 ? (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Bez przypisanego dnia</CardTitle>
+                  <p className="text-xs text-muted-foreground font-normal">
+                    Pozycje sprzed podziału lub po usunięciu dnia. Możesz je usunąć albo dodać je ponownie w wybranym dniu.
+                  </p>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex justify-end">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const nextOpen = !(
+                          addPanel.open && addPanel.target.mode === "multi" && addPanel.target.dayId === null
+                        );
+                        setAddPanel({ open: nextOpen, target: { mode: "multi", dayId: null } });
+                        if (nextOpen) setAddSearch("");
+                      }}
+                    >
+                      <Plus className="w-4 h-4 mr-1" />
+                      Dodaj pozycję (bez dnia)
+                    </Button>
+                  </div>
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="hover:bg-transparent">
+                        <TableHead className="font-semibold text-foreground">Produkt</TableHead>
+                        <TableHead className="font-semibold text-foreground text-center w-32">Ilość</TableHead>
+                        <TableHead className="font-semibold text-foreground text-right w-40">Cena jedn.</TableHead>
+                        <TableHead className="font-semibold text-foreground text-right w-32">Razem</TableHead>
+                        <TableHead className="font-semibold text-foreground text-center w-24 text-xs">Oferta</TableHead>
+                        <TableHead className="w-12"></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {unassignedRows
+                        .filter(({ item }) => !isAddonLineItem(effectiveLineItemType(item)))
+                        .map(renderEditRow)}
+                    </TableBody>
+                  </Table>
+                  {unassignedRows.some(({ item }) => isAddonLineItem(effectiveLineItemType(item))) ? (
+                    <div className="rounded-lg border border-border bg-muted/20 p-3">
+                      <h4 className="text-sm font-semibold text-foreground mb-2">Dodatki (bez dnia)</h4>
+                      <Table>
+                        <TableBody>
+                          {unassignedRows
+                            .filter(({ item }) => isAddonLineItem(effectiveLineItemType(item)))
+                            .map(renderEditRow)}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  ) : null}
+                </CardContent>
+              </Card>
+            ) : null}
+
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={() => {
+                setEditingDay({
+                  id: randomUUID(),
+                  label: `Dzień ${eventDays.length + 1}`,
+                  eventType: "",
+                  date: "",
+                  startTime: "",
+                  endTime: "",
+                  guestCount: 0,
+                  deliveryAddress: "",
+                });
+                setDayDialogOpen(true);
+              }}
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Dodaj kolejny dzień
+            </Button>
+          </div>
+        )}
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Podsumowanie</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableBody>
+                <TableRow className="hover:bg-transparent border-t-0">
+                  <TableCell colSpan={3} className="text-right font-semibold text-foreground">
+                    Suma pozycji:
+                  </TableCell>
+                  <TableCell className="text-right font-semibold text-foreground">{fmtNum(totalAmount)} zł</TableCell>
+                  <TableCell colSpan={2} />
+                </TableRow>
+                {discount > 0 && (
+                  <TableRow className="hover:bg-transparent">
+                    <TableCell colSpan={3} className="text-right font-semibold text-destructive">
+                      Rabat:
+                    </TableCell>
+                    <TableCell className="text-right font-semibold text-destructive">
+                      -{fmtNum(discount)} zł
+                    </TableCell>
+                    <TableCell colSpan={2} />
+                  </TableRow>
+                )}
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={3} className="text-right font-bold text-foreground text-base">
+                    Do zapłaty:
+                  </TableCell>
+                  <TableCell className="text-right font-bold text-primary text-lg">{fmtNum(finalAmount)} zł</TableCell>
+                  <TableCell colSpan={2} />
+                </TableRow>
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+
+          <div className="flex flex-wrap gap-3">
+            <Button type="button" onClick={handleSave}>
+              <Check className="w-4 h-4 mr-1" />
+              Zapisz zmiany
+            </Button>
+            <Button type="button" variant="outline" onClick={onBack}>
+              Anuluj
+            </Button>
+          </div>
+        </div>
+
+        {/* Prawy panel: meta zamówienia */}
+        <div className="w-full lg:w-[min(380px,calc(100vw-2rem))] shrink-0 space-y-4 order-2 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Status</CardTitle>
+            </CardHeader>
             <CardContent>
               <Select value={status} onValueChange={(v) => setStatus(v as OrderStatus)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
-                  {allStatuses.map((s) => (<SelectItem key={s} value={s}>{s}</SelectItem>))}
+                  {allStatuses.map((s) => (
+                    <SelectItem key={s} value={s}>
+                      {s}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </CardContent>
           </Card>
           <Card>
-            <CardHeader className="pb-3"><CardTitle className="text-base">Adres dostawy</CardTitle></CardHeader>
-            <CardContent>
-              <Input value={deliveryAddress} onChange={(e) => setDeliveryAddress(e.target.value)} />
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-3"><CardTitle className="text-base">Rabat</CardTitle></CardHeader>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Rabat</CardTitle>
+            </CardHeader>
             <CardContent>
               <div className="flex items-center gap-2">
                 <Input
@@ -889,123 +1873,13 @@ const OrderEditView = ({ order, onBack, onSave }: { order: Order; onBack: () => 
             </CardContent>
           </Card>
           <Card>
-            <CardHeader className="pb-3"><CardTitle className="text-base">Uwagi</CardTitle></CardHeader>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Uwagi</CardTitle>
+            </CardHeader>
             <CardContent>
-              <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="Uwagi..." />
+              <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={4} placeholder="Uwagi..." />
             </CardContent>
           </Card>
-        </div>
-
-        {/* Items editing */}
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base">Pozycje zamówienia</CardTitle>
-              <Button variant="outline" size="sm" onClick={() => setShowAddProduct(!showAddProduct)}>
-                {showAddProduct ? <X className="w-4 h-4 mr-1" /> : <span className="mr-1">+</span>}
-                {showAddProduct ? "Anuluj" : "Dodaj pozycję"}
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {/* Add product panel */}
-            {showAddProduct && (
-              <div className="mb-4 p-4 rounded-lg border border-border bg-muted/30">
-                <div className="relative mb-3">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Szukaj produktu..."
-                    value={addSearch}
-                    onChange={(e) => setAddSearch(e.target.value)}
-                    className="pl-9"
-                    autoFocus
-                  />
-                </div>
-                <div className="max-h-48 overflow-y-auto space-y-1">
-                  {filteredCatalog.map((product) => (
-                    <button
-                      key={product.id}
-                      onClick={() => addProduct(product)}
-                      className="w-full flex items-center justify-between px-3 py-2 rounded-md text-sm hover:bg-accent transition-colors text-left"
-                    >
-                      <span className="font-medium text-foreground">{product.name}</span>
-                      <span className="text-muted-foreground text-xs">{fmtNum(product.defaultPrice)} zł / {product.unit}</span>
-                    </button>
-                  ))}
-                  {filteredCatalog.length === 0 && (
-                    <p className="text-sm text-muted-foreground text-center py-3">Nie znaleziono produktów</p>
-                  )}
-                </div>
-                {configuringProduct && (
-                  <SubItemSelector product={configuringProduct} onConfirm={handleSubItemConfirm} onCancel={() => setConfiguringProduct(null)} />
-                )}
-              </div>
-            )}
-
-            <div className="space-y-6">
-              <div>
-                <h4 className="text-sm font-semibold text-foreground mb-2">Produkty</h4>
-                <Table>
-                  <TableHeader>
-                    <TableRow className="hover:bg-transparent">
-                      <TableHead className="font-semibold text-foreground">Produkt</TableHead>
-                      <TableHead className="font-semibold text-foreground text-center w-32">Ilość</TableHead>
-                      <TableHead className="font-semibold text-foreground text-right w-40">Cena jedn.</TableHead>
-                      <TableHead className="font-semibold text-foreground text-right w-32">Razem</TableHead>
-                      <TableHead className="w-12"></TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>{primaryRows.map(renderEditRow)}</TableBody>
-                </Table>
-              </div>
-              {addonRows.length > 0 ? (
-                <div className="rounded-lg border border-border bg-muted/20 p-3">
-                  <h4 className="text-sm font-semibold text-foreground mb-2">Dodatki i usługi</h4>
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="hover:bg-transparent">
-                        <TableHead className="font-semibold text-foreground">Produkt</TableHead>
-                        <TableHead className="font-semibold text-foreground text-center w-32">Ilość</TableHead>
-                        <TableHead className="font-semibold text-foreground text-right w-40">Cena jedn.</TableHead>
-                        <TableHead className="font-semibold text-foreground text-right w-32">Razem</TableHead>
-                        <TableHead className="w-12"></TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>{addonRows.map(renderEditRow)}</TableBody>
-                  </Table>
-                </div>
-              ) : null}
-              <Table>
-                <TableBody>
-                <TableRow className="hover:bg-transparent border-t-2">
-                  <TableCell colSpan={3} className="text-right font-semibold text-foreground">Suma pozycji:</TableCell>
-                  <TableCell className="text-right font-semibold text-foreground">{fmtNum(totalAmount)} zł</TableCell>
-                  <TableCell />
-                </TableRow>
-                {discount > 0 && (
-                  <TableRow className="hover:bg-transparent">
-                    <TableCell colSpan={3} className="text-right font-semibold text-destructive">Rabat:</TableCell>
-                    <TableCell className="text-right font-semibold text-destructive">-{fmtNum(discount)} zł</TableCell>
-                    <TableCell />
-                  </TableRow>
-                )}
-                <TableRow className="hover:bg-transparent">
-                  <TableCell colSpan={3} className="text-right font-bold text-foreground text-base">Do zapłaty:</TableCell>
-                  <TableCell className="text-right font-bold text-primary text-lg">{fmtNum(finalAmount)} zł</TableCell>
-                  <TableCell />
-                </TableRow>
-              </TableBody>
-            </Table>
-            </div>
-          </CardContent>
-        </Card>
-
-        <div className="flex gap-3">
-          <Button onClick={handleSave}>
-            <Check className="w-4 h-4 mr-1" />
-            Zapisz zmiany
-          </Button>
-          <Button variant="outline" onClick={onBack}>Anuluj</Button>
         </div>
       </div>
     </div>
@@ -1227,18 +2101,6 @@ const InlineAmountInput = ({ value, onChange }: { value: number; onChange: (v: n
 };
 
 
-export const formatOrderDate = (dateStr: string | null) => {
-  if (!dateStr) return "—";
-  const d = new Date(dateStr);
-  const months = ["sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paź", "lis", "gru"];
-  return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
-};
-export const formatOrderTime = (timeStr: string | null) => {
-  if (!timeStr) return "—";
-  const t = new Date(timeStr).getUTCHours().toString().padStart(2, "0") + ":" + new Date(timeStr).getUTCMinutes().toString().padStart(2, "0");
-  return t;
-};
-
 // ===== MAIN VIEW =====
 const OrdersView = () => {
   const [orders, setOrders] = useState<Order[]>(mockOrders);
@@ -1249,6 +2111,7 @@ const OrdersView = () => {
   const [selectedDocType, setSelectedDocType] = useState<OrderDocumentType>("offer");
   const [showAddOrder, setShowAddOrder] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
+  const [listRefreshing, setListRefreshing] = useState(false);
 
   const ordersListScrollRef = useRef<HTMLDivElement>(null);
   const ordersListDragRef = useRef({ active: false, moved: false, startX: 0, startScrollLeft: 0 });
@@ -1362,14 +2225,23 @@ const OrdersView = () => {
   const fetchOrders = useCallback(async () => {
     try {
       const dbOrders = await api.getAdminOrders();
-      if (!dbOrders || dbOrders.length === 0) return;
-      const mapped: Order[] = dbOrders.map((o) => mapAdminApiOrderToOrder(o, formatOrderDate, formatOrderTime, fmtNum));
-
+      const list = Array.isArray(dbOrders) ? dbOrders : [];
+      const mapped: Order[] = list.map((o) => mapAdminApiOrderToOrder(o, formatOrderDate, formatOrderTime, fmtNum));
       setOrders(mapped);
     } catch (err) {
       console.error("Error fetching orders:", err);
+      toast.error("Nie udało się wczytać listy zamówień. Sprawdź połączenie lub odśwież stronę.");
     }
   }, []);
+
+  const handleRefreshOrdersList = useCallback(async () => {
+    setListRefreshing(true);
+    try {
+      await fetchOrders();
+    } finally {
+      setListRefreshing(false);
+    }
+  }, [fetchOrders]);
 
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect -- initial data fetch on mount */
@@ -1405,6 +2277,19 @@ const OrdersView = () => {
   const openEdit = (order: Order) => { setSelectedOrder(order); setView("edit"); };
   const goBack = () => { setView("list"); setSelectedOrder(null); };
 
+  const refreshSelectedOrder = useCallback(async () => {
+    const dbId = selectedOrder?.dbId;
+    if (!dbId) return;
+    try {
+      const raw = await api.getAdminOrder(dbId);
+      const mapped = mapAdminApiOrderToOrder(raw, formatOrderDate, formatOrderTime, fmtNum);
+      setSelectedOrder(mapped);
+      setOrders((prev) => prev.map((o) => (o.dbId === mapped.dbId ? mapped : o)));
+    } catch {
+      toast.error("Nie udało się odświeżyć zamówienia");
+    }
+  }, [selectedOrder?.dbId]);
+
   const handleLinkClient = async (orderDbId: string, clientId: string) => {
     if (orderDbId) {
       try {
@@ -1435,19 +2320,48 @@ const OrdersView = () => {
         await api.updateAdminOrder(updated.dbId, {
           status: updated.status,
           notes: updated.notes,
+          eventType: updated.event?.trim() ? updated.event.trim() : null,
+          guestCount: updated.guestCount ?? 0,
           deliveryAddress: updated.deliveryAddress,
+          eventDate:
+            updated.eventDateIso != null && String(updated.eventDateIso).trim() !== ""
+              ? String(updated.eventDateIso).trim().slice(0, 10)
+              : null,
+          eventTime:
+            updated.eventTimeHHMM != null && String(updated.eventTimeHHMM).trim() !== ""
+              ? `1970-01-01T${String(updated.eventTimeHHMM).trim()}:00.000Z`
+              : null,
           amount: updated.amountNum,
           discount: updated.discount,
           deposit: updated.deposit,
+          orderEventDays: (updated.eventDays ?? []).map((d, i) => ({
+            id: d.id,
+            label: d.label,
+            date: d.date || null,
+            startTime: d.startTime || null,
+            endTime: d.endTime || null,
+            sortOrder: i,
+            eventType: d.eventType != null && String(d.eventType).trim() ? String(d.eventType).trim() : null,
+            guestCount: typeof d.guestCount === "number" ? d.guestCount : 0,
+            deliveryAddress:
+              d.deliveryAddress != null && String(d.deliveryAddress).trim()
+                ? String(d.deliveryAddress).trim()
+                : null,
+          })),
           orderItems: updated.items.map((item) => ({
             name: item.name,
             quantity: item.quantity,
             unit: item.unit,
             pricePerUnit: item.pricePerUnit,
             total: item.total,
-            itemType: item.type || "simple",
+            itemType: item.type || item.itemType || "simple",
             foodCostPerUnit: item.foodCostPerUnit ?? 0,
             ...(item.dishId ? { dishId: item.dishId } : {}),
+            ...(item.sourceProductId ? { sourceProductId: item.sourceProductId } : {}),
+            offerClientToggle: item.offerClientToggle === true,
+            offerClientAccepted:
+              item.offerClientToggle === true ? Boolean(item.offerClientAccepted) : true,
+            orderEventDayId: item.orderEventDayId ?? null,
             subItems: (item.subItems ?? []).map((sub) => ({
               name: sub.name,
               quantity: sub.quantity,
@@ -1487,7 +2401,16 @@ const OrdersView = () => {
   }
 
   if (view === "detail" && selectedOrder) {
-    return <OrderDetailView order={selectedOrder} onBack={goBack} onEdit={() => setView("edit")} onGenerateDoc={handleGenerateDoc} onLinkClient={handleLinkClient} />;
+    return (
+      <OrderDetailView
+        order={selectedOrder}
+        onBack={goBack}
+        onEdit={() => setView("edit")}
+        onGenerateDoc={handleGenerateDoc}
+        onLinkClient={handleLinkClient}
+        onRefreshOrder={refreshSelectedOrder}
+      />
+    );
   }
 
   if (view === "edit" && selectedOrder) {
@@ -1502,6 +2425,16 @@ const OrdersView = () => {
           <p className="text-muted-foreground text-sm">Zarządzaj zamówieniami cateringowymi</p>
         </div>
         <div className="flex gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={listRefreshing}
+            onClick={() => void handleRefreshOrdersList()}
+            title="Ponownie wczytaj listę z serwera"
+          >
+            <RefreshCw className={cn("w-4 h-4 mr-1", listRefreshing && "animate-spin")} />
+            Odśwież
+          </Button>
           <Button variant="outline" onClick={() => setShowSummary(true)}>
             <FileDown className="w-4 h-4 mr-1" />
             Generuj podsumowanie
@@ -1627,8 +2560,11 @@ const OrdersView = () => {
       <AddOrderSheet
         open={showAddOrder}
         onClose={() => setShowAddOrder(false)}
-        onCreated={(order) => setOrders((prev) => [order, ...prev])}
-        onRefresh={fetchOrders}
+        onSuccess={async () => {
+          setStatusFilter("all");
+          setSearch("");
+          await fetchOrders();
+        }}
       />
 
       <SummarySheet

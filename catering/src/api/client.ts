@@ -49,8 +49,13 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     ...rest,
   });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error || err.message || String(res.status));
+    const err = (await res.json().catch(() => ({}))) as { error?: string; message?: string; detail?: string };
+    const base = err.error || err.message || res.statusText;
+    const detail =
+      typeof err.detail === "string" && err.detail.trim() && import.meta.env.DEV
+        ? ` — ${err.detail.trim()}`
+        : "";
+    throw new Error(`${base}${detail}`);
   }
   if (res.status === 204) return undefined as T;
   return res.json();
@@ -203,6 +208,7 @@ export interface SubmitOrderPayload {
     itemType?: string;
     foodCostPerUnit?: number;
     dishId?: string;
+    sourceProductId?: string;
     subItems?: Array<{
       name: string;
       quantity: number;
@@ -290,13 +296,33 @@ export async function deleteClient(id: string): Promise<void> {
 }
 
 export async function getAdminOrders(): Promise<AdminOrder[]> {
-  const data = await request<unknown[]>("/api/admin/orders");
-  return AdminOrdersSchema.parse(data);
+  const data = await request<unknown>("/api/admin/orders");
+  if (!Array.isArray(data)) return [];
+  const batch = AdminOrdersSchema.safeParse(data);
+  if (batch.success) return batch.data;
+  console.warn("[getAdminOrders] walidacja tablicy nie przeszła, próba wiersz po wierszu", batch.error.format());
+  const out: AdminOrder[] = [];
+  for (let i = 0; i < data.length; i++) {
+    const one = AdminOrderSchema.safeParse(data[i]);
+    if (one.success) out.push(one.data);
+    else console.warn(`[getAdminOrders] pominięto wiersz ${i}`, one.error.format());
+  }
+  if (out.length === 0 && data.length > 0) {
+    throw new Error(
+      "Serwer zwrócił zamówienia w nieobsługiwanym formacie. Szczegóły w konsoli przeglądarki (F12 → Console)."
+    );
+  }
+  return out;
 }
 
 export async function getAdminOrder(id: string): Promise<AdminOrder> {
   const data = await request<unknown>(`/api/admin/orders/${id}`);
-  return AdminOrderSchema.parse(data);
+  const parsed = AdminOrderSchema.safeParse(data);
+  if (parsed.success) return parsed.data;
+  console.warn("[getAdminOrder] Zod:", parsed.error.format());
+  throw new Error(
+    "Nie udało się odczytać zamówienia (format odpowiedzi). Szczegóły w konsoli (F12)."
+  );
 }
 
 export async function updateAdminOrder(id: string, body: Record<string, unknown>): Promise<unknown> {
@@ -311,6 +337,70 @@ export async function createAdminOrder(
   payload: SubmitOrderPayload & { clientId?: string | null }
 ): Promise<{ orderId: string; orderNumber: string }> {
   return request("/api/admin/orders", { method: "POST", body: payload });
+}
+
+/** Publiczny link interaktywnej oferty (CSRF + sesja admina). */
+export async function createOfferPublicLink(orderId: string): Promise<{ token: string; publicPath: string }> {
+  return request(`/api/admin/orders/${orderId}/offer-token`, { method: "POST" });
+}
+
+const publicApiBase = () => import.meta.env.VITE_API_URL || "";
+
+export async function getPublicOffer(token: string): Promise<unknown> {
+  const res = await fetch(`${publicApiBase()}/api/public/offers/${encodeURIComponent(token)}`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(typeof data === "object" && data && "error" in data ? String((data as { error: string }).error) : res.statusText);
+  }
+  return data;
+}
+
+export async function putPublicOfferSelections(
+  token: string,
+  body: {
+    selections: Record<string, Record<string, string>>;
+    toggles?: Record<string, boolean>;
+    lineQuantities?: Record<string, number>;
+    orderDetails?: {
+      guestCount?: number | string | null;
+      eventDate?: string | null;
+      eventTime?: string | null;
+      deliveryAddress?: string | null;
+    };
+    /** PATCH szczegółów per dzień (oferta wielodniowa). */
+    dayOrderDetails?: Array<{
+      dayId: string;
+      guestCount?: number | string | null;
+      eventDate?: string | null;
+      eventTime?: string | null;
+      deliveryAddress?: string | null;
+      eventType?: string | null;
+    }>;
+  }
+): Promise<unknown> {
+  const payload: Record<string, unknown> = {
+    selections: body.selections,
+  };
+  if (body.toggles && Object.keys(body.toggles).length > 0) payload.toggles = body.toggles;
+  if (body.lineQuantities && Object.keys(body.lineQuantities).length > 0) {
+    payload.lineQuantities = body.lineQuantities;
+  }
+  if (body.orderDetails && Object.keys(body.orderDetails).length > 0) {
+    payload.orderDetails = body.orderDetails;
+  }
+  if (body.dayOrderDetails && body.dayOrderDetails.length > 0) {
+    payload.dayOrderDetails = body.dayOrderDetails;
+  }
+  const res = await fetch(`${publicApiBase()}/api/public/offers/${encodeURIComponent(token)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(typeof data === "object" && data && "error" in data ? String((data as { error: string }).error) : res.statusText);
+  }
+  return data;
 }
 
 export async function getAdminCatalog(): Promise<{

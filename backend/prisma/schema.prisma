@@ -402,6 +402,8 @@ model Client {
 model Order {
   id               String    @id @default(uuid())
   orderNumber      String
+  /// Losowy token do publicznej strony interaktywnej oferty (bez logowania).
+  publicOfferToken String?   @unique @map("public_offer_token")
   clientId         String?
   clientName       String    @default("")
   clientEmail      String?
@@ -434,8 +436,28 @@ model Order {
   deliveryZone DeliveryZone? @relation(fields: [deliveryZoneId], references: [id])
   orderItems          OrderItem[]
   orderFoodCostExtras OrderFoodCostExtra[]
+  orderEventDays      OrderEventDay[]
 
   @@map("orders")
+}
+
+model OrderEventDay {
+  id        String    @id @default(uuid())
+  orderId   String
+  label     String    @default("")
+  date      DateTime? @db.Date
+  startTime DateTime? @db.Time
+  endTime   DateTime? @db.Time
+  sortOrder Int       @default(0)
+  /// Typ wydarzenia (np. nazwa lub ID z katalogu typów) — per dzień przy ofercie wielodniowej.
+  eventType       String? @map("event_type")
+  guestCount      Int?    @map("guest_count")
+  deliveryAddress String? @map("delivery_address")
+
+  order      Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderItems OrderItem[]
+
+  @@map("order_event_days")
 }
 
 model OrderItem {
@@ -450,10 +472,19 @@ model OrderItem {
   foodCostPerUnit Decimal?
   sortOrder       Int      @default(0)
   dishId          String?
+  /// ID produktu z katalogu (np. configurable set / bundle / dish) dla publicznej oferty.
+  sourceProductId String?  @map("source_product_id")
+  /// Pozycja opcjonalna na publicznej stronie oferty — klient włącza/wyłącza.
+  offerClientToggle   Boolean @default(false) @map("offer_client_toggle")
+  /// Gdy offerClientToggle: czy klient zaakceptował pozycję (wlicza się w kwotę).
+  offerClientAccepted Boolean @default(true) @map("offer_client_accepted")
+  /// Powiązanie z dniem/sesją wydarzenia (null = pozycja ogólna).
+  orderEventDayId     String? @map("order_event_day_id")
 
-  order     Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  subItems  OrderItemSubItem[]
-  dish      Dish?     @relation(fields: [dishId], references: [id])
+  order         Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  subItems      OrderItemSubItem[]
+  dish          Dish?               @relation(fields: [dishId], references: [id])
+  orderEventDay OrderEventDay?      @relation(fields: [orderEventDayId], references: [id])
 
   @@map("order_items")
 }

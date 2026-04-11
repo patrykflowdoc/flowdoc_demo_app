@@ -1,5 +1,7 @@
 # Production override: no source mounts — use built images only.
 # Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Nadpisuje nazwę projektu z docker-compose.yml (dev: szczypta-smaku-local).
 
 name: szczypta-smaku
 

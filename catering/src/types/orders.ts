@@ -19,6 +19,20 @@ export type OrderSubItem = {
   pricePerUnit?: number;
 };
 
+/** Dzień/sesja wydarzenia (np. dzień 1 z 3). */
+export type OrderEventDay = {
+  id: string;
+  label: string;
+  date: string | null;
+  startTime: string | null;
+  endTime: string | null;
+  sortOrder: number;
+  /** Pełne szczegóły jak karta „Wydarzenie” (wielodniowa oferta). */
+  eventType?: string | null;
+  guestCount?: number;
+  deliveryAddress?: string | null;
+};
+
 /** PDF / admin order line (OrderItem + optional subItems). */
 export type OrderItem = {
   id?: string;
@@ -31,6 +45,14 @@ export type OrderItem = {
   itemType?: string;
   foodCostPerUnit?: number;
   dishId?: string;
+  /** ID produktu z katalogu (zestaw konfigurowalny / pakiet / danie) — link publicznej oferty. */
+  sourceProductId?: string;
+  /** Klient na stronie /offer włącza/wyłącza pozycję (dodatki, pojedyncze produkty). */
+  offerClientToggle?: boolean;
+  /** Gdy offerClientToggle: czy klient zaakceptował (wlicza się w kwotę). */
+  offerClientAccepted?: boolean;
+  /** Przypisanie do dnia/sesji wydarzenia. */
+  orderEventDayId?: string | null;
   dish?: Dish;
   subItems: OrderSubItem[] | null;
 };
@@ -73,6 +95,8 @@ export type OrderStatus =
 export interface Order {
   id: string;
   dbId: string;
+  /** Token publicznej strony /offer/{token} (tylko oferty). */
+  publicOfferToken?: string | null;
   cateringType: CateringType | null;
   client: string;
   clientId: string | null;
@@ -81,6 +105,10 @@ export interface Order {
   event: string;
   date: string;
   time: string;
+  /** Z API — do pól `type="date"` / zapisu (YYYY-MM-DD). */
+  eventDateIso?: string | null;
+  /** Z API — do pola `type="time"` (HH:mm). */
+  eventTimeHHMM?: string | null;
   deliveryAddress: string;
   companyName?: string | null;
   companyNip?: string | null;
@@ -93,6 +121,7 @@ export interface Order {
   status: OrderStatus;
   notes: string;
   items: OrderItem[];
+  eventDays: OrderEventDay[];
   createdAt: string;
   deliveryCost: number;
   guestCount: number;

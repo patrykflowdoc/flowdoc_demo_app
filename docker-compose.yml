@@ -1,4 +1,6 @@
-name: szczypta-smaku
+# Dev / lokalnie: osobna nazwa projektu i porty hosta, żeby nie kolidować z innymi repozytoriami.
+# Produkcja: docker compose -f docker-compose.yml -f docker-compose.prod.yml nadpisuje `name`.
+name: szczypta-smaku-local
 
 services:
   seed:
@@ -25,7 +27,7 @@ services:
       - LANG=C.UTF-8
       - LC_ALL=C.UTF-8
     ports:
-      - "5431:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -36,7 +38,10 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     ports:
-      - "25044:25044"
+      - "25144:25044"
+    environment:
+      # W kontenerze zostaje 25044 (mapowanie host 25144 → 25044). Lokalne `npm run dev` używa PORT z .env (25144).
+      - PORT=25044
     env_file:
       - ./backend/.env
     volumes:
@@ -53,7 +58,7 @@ services:
       context: ./catering
       dockerfile: Dockerfile
     ports:
-      - "3000:3000"
+      - "3100:3000"
     environment:
       - VITE_API_PROXY_TARGET=http://backend:25044
     volumes:
