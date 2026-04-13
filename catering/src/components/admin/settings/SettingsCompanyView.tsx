@@ -6,7 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { getCompanySettings, updateCompanySettings, uploadAdminImage } from "@/api/client";
 import { toast } from "@/components/ui/sonner";
-import { Image, Loader2, Upload, X } from "lucide-react";
+import { CreditCard, Image, Loader2, Upload, X } from "lucide-react";
+
+const STRIPE_BILLING_PORTAL_URL = "https://billing.stripe.com/p/login/3cs18bbuid67dag4gg";
 
 const SettingsCompanyView = () => {
   const [_settingsId, setSettingsId] = useState<string | null>(null);
@@ -233,6 +235,24 @@ const SettingsCompanyView = () => {
               <Input id="privacyPolicy" placeholder="https://example.com/regulamin" value={privacyPolicyUrl} onChange={(e) => setPrivacyPolicyUrl(e.target.value)} />
               <p className="text-xs text-muted-foreground">Wyświetlany w formularzu zamówienia do akceptacji</p>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Płatności</CardTitle>
+            <CardDescription>Subskrypcja i rozliczenia w Stripe</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              W portalu Stripe możesz zarządzać subskrypcją, metodami płatności oraz pobrać faktury.
+            </p>
+            <Button variant="outline" asChild className="w-full sm:w-auto">
+              <a href={STRIPE_BILLING_PORTAL_URL} target="_blank" rel="noopener noreferrer">
+                <CreditCard className="w-4 h-4 mr-2" />
+                Otwórz portal płatności
+              </a>
+            </Button>
           </CardContent>
         </Card>
 

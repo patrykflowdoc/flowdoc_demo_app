@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { cn } from "@/lib/utils";
 import { Loader2, Minus, Plus, UtensilsCrossed } from "lucide-react";
@@ -85,6 +86,8 @@ type PublicOfferLine = {
   offerClientToggle?: boolean;
   offerClientAccepted?: boolean;
   orderEventDayId?: string | null;
+  /** Jedna notatka na pozycję — ta sama kolumna co w panelu admina. */
+  offerLineNotes?: string | null;
   imageUrl?: string | null;
   subItems: Array<{ id?: string; name: string; quantity: number; unit: string; dishId?: string | null }>;
   configurableSet: PublicOfferConfigurableSet | null;
@@ -243,6 +246,8 @@ const ConfigurableLineCard = ({
   configurableQtyDraft,
   setConfigurableQtyDraft,
   guestCountForSync,
+  lineNote,
+  onLineNoteChange,
 }: {
   item: PublicOfferLine;
   selections: Record<string, Record<string, string>>;
@@ -253,6 +258,8 @@ const ConfigurableLineCard = ({
   setConfigurableQtyDraft: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   /** Liczba gości do przycisku „jak liczba gości” — z dnia lub z zamówienia. */
   guestCountForSync: string;
+  lineNote: string;
+  onLineNoteChange: (value: string) => void;
 }) => {
   const set = item.configurableSet!;
   const sel = selections[item.id] ?? {};
@@ -323,6 +330,19 @@ const ConfigurableLineCard = ({
             </RadioGroup>
           </div>
         ))}
+        <div className="space-y-2 pt-2 border-t border-border">
+          <Label htmlFor={`offer-line-note-${item.id}`} className="text-sm">
+            Uwagi do tej pozycji
+          </Label>
+          <Textarea
+            id={`offer-line-note-${item.id}`}
+            rows={2}
+            className="text-sm min-h-[52px] resize-y"
+            placeholder="Opcjonalnie — widoczne dla biura cateringowego"
+            value={lineNote}
+            onChange={(e) => onLineNoteChange(e.target.value)}
+          />
+        </div>
       </CardContent>
     </Card>
   );
@@ -334,12 +354,16 @@ const OptionalLinesCard = ({
   setOptionalQuantities,
   optionalQtyDraft,
   setOptionalQtyDraft,
+  lineNotes,
+  onLineNoteChange,
 }: {
   items: PublicOfferLine[];
   optionalQuantities: Record<string, number>;
   setOptionalQuantities: React.Dispatch<React.SetStateAction<Record<string, number>>>;
   optionalQtyDraft: Record<string, string>;
   setOptionalQtyDraft: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  lineNotes: Record<string, string>;
+  onLineNoteChange: (itemId: string, value: string) => void;
 }) => (
   <div className="space-y-3">
     {items.map((item) => {
@@ -347,32 +371,47 @@ const OptionalLinesCard = ({
       const qEff = qtyFromDraft(optionalQtyDraft[item.id], q);
       const lineSum = qEff * item.pricePerUnit;
       return (
-        <div key={item.id} className="flex flex-col gap-3 rounded-lg border border-border p-4 bg-background sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex gap-3 min-w-0 flex-1 items-start">
-            <PublicOfferImage src={resolvePublicOfferImageUrl(item.imageUrl)} alt={item.name} className="h-12 w-12 shrink-0" />
-            <div className="min-w-0">
-              <p className="font-medium text-foreground">{item.name}</p>
-              <p className="text-sm text-muted-foreground mt-0.5">{item.pricePerUnit.toFixed(2)} zł / {item.unit}</p>
+        <div key={item.id} className="flex flex-col gap-3 rounded-lg border border-border p-4 bg-background">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex gap-3 min-w-0 flex-1 items-start">
+              <PublicOfferImage src={resolvePublicOfferImageUrl(item.imageUrl)} alt={item.name} className="h-12 w-12 shrink-0" />
+              <div className="min-w-0">
+                <p className="font-medium text-foreground">{item.name}</p>
+                <p className="text-sm text-muted-foreground mt-0.5">{item.pricePerUnit.toFixed(2)} zł / {item.unit}</p>
+              </div>
+            </div>
+            <div className="flex flex-row items-center justify-between gap-3 sm:flex-col sm:items-end sm:justify-center">
+              <div className="flex items-center gap-1 rounded-lg border border-border bg-muted/30 p-1">
+                <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" disabled={q <= 0} aria-label="Zmniejsz"
+                  onClick={() => { setOptionalQtyDraft(({ [item.id]: _, ...rest }) => rest); setOptionalQuantities((prev) => ({ ...prev, [item.id]: Math.max(0, (prev[item.id] ?? 0) - 1) })); }}>
+                  <Minus className="h-4 w-4" />
+                </Button>
+                <Input type="text" inputMode="numeric" autoComplete="off" aria-label={`Ilość: ${item.name}`}
+                  className="h-9 w-[5.5rem] text-center tabular-nums"
+                  value={optionalQtyDraft[item.id] ?? String(q)}
+                  onChange={(e) => { const digits = e.target.value.replace(/\D/g, ""); setOptionalQtyDraft((d) => ({ ...d, [item.id]: digits })); }}
+                  onBlur={() => { const raw = optionalQtyDraft[item.id]; if (raw === undefined) return; const n = raw === "" ? 0 : parseInt(raw, 10); setOptionalQuantities((prev) => ({ ...prev, [item.id]: clampOfferQty(Number.isFinite(n) ? n : 0) })); setOptionalQtyDraft(({ [item.id]: _, ...rest }) => rest); }}
+                />
+                <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" aria-label="Zwiększ"
+                  onClick={() => { setOptionalQtyDraft(({ [item.id]: _, ...rest }) => rest); setOptionalQuantities((prev) => ({ ...prev, [item.id]: Math.min(QTY_MAX, (prev[item.id] ?? 0) + 1) })); }}>
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+              <span className="text-sm font-semibold tabular-nums">{lineSum.toFixed(2)} zł</span>
             </div>
           </div>
-          <div className="flex flex-row items-center justify-between gap-3 sm:flex-col sm:items-end sm:justify-center">
-            <div className="flex items-center gap-1 rounded-lg border border-border bg-muted/30 p-1">
-              <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" disabled={q <= 0} aria-label="Zmniejsz"
-                onClick={() => { setOptionalQtyDraft(({ [item.id]: _, ...rest }) => rest); setOptionalQuantities((prev) => ({ ...prev, [item.id]: Math.max(0, (prev[item.id] ?? 0) - 1) })); }}>
-                <Minus className="h-4 w-4" />
-              </Button>
-              <Input type="text" inputMode="numeric" autoComplete="off" aria-label={`Ilość: ${item.name}`}
-                className="h-9 w-[5.5rem] text-center tabular-nums"
-                value={optionalQtyDraft[item.id] ?? String(q)}
-                onChange={(e) => { const digits = e.target.value.replace(/\D/g, ""); setOptionalQtyDraft((d) => ({ ...d, [item.id]: digits })); }}
-                onBlur={() => { const raw = optionalQtyDraft[item.id]; if (raw === undefined) return; const n = raw === "" ? 0 : parseInt(raw, 10); setOptionalQuantities((prev) => ({ ...prev, [item.id]: clampOfferQty(Number.isFinite(n) ? n : 0) })); setOptionalQtyDraft(({ [item.id]: _, ...rest }) => rest); }}
-              />
-              <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" aria-label="Zwiększ"
-                onClick={() => { setOptionalQtyDraft(({ [item.id]: _, ...rest }) => rest); setOptionalQuantities((prev) => ({ ...prev, [item.id]: Math.min(QTY_MAX, (prev[item.id] ?? 0) + 1) })); }}>
-                <Plus className="h-4 w-4" />
-              </Button>
-            </div>
-            <span className="text-sm font-semibold tabular-nums">{lineSum.toFixed(2)} zł</span>
+          <div className="space-y-2 pt-1 border-t border-border">
+            <Label htmlFor={`offer-opt-note-${item.id}`} className="text-sm">
+              Uwagi do tej pozycji
+            </Label>
+            <Textarea
+              id={`offer-opt-note-${item.id}`}
+              rows={2}
+              className="text-sm min-h-[52px] resize-y"
+              placeholder="Opcjonalnie — widoczne dla biura cateringowego"
+              value={lineNotes[item.id] ?? ""}
+              onChange={(e) => onLineNoteChange(item.id, e.target.value)}
+            />
           </div>
         </div>
       );
@@ -380,13 +419,21 @@ const OptionalLinesCard = ({
   </div>
 );
 
-const ReadOnlyLinesCard = ({ items }: { items: PublicOfferLine[] }) => (
+const ReadOnlyLinesCard = ({
+  items,
+  lineNotes,
+  onLineNoteChange,
+}: {
+  items: PublicOfferLine[];
+  lineNotes: Record<string, string>;
+  onLineNoteChange: (itemId: string, value: string) => void;
+}) => (
   <div className="space-y-3">
     {items.map((item) => {
       const kind = offerLineKindLabel(item.itemType);
       const subs = item.subItems ?? [];
       return (
-        <div key={item.id} className="rounded-lg border border-border bg-background p-4 space-y-2">
+        <div key={item.id} className="rounded-lg border border-border bg-background p-4 space-y-3">
           <div className="flex gap-3 items-start">
             <PublicOfferImage src={resolvePublicOfferImageUrl(item.imageUrl)} alt={item.name} className="h-14 w-14" />
             <div className="min-w-0 flex-1">
@@ -400,6 +447,19 @@ const ReadOnlyLinesCard = ({ items }: { items: PublicOfferLine[] }) => (
               ) : null}
             </div>
             <span className="text-sm font-semibold shrink-0">{item.total.toFixed(2)} zł</span>
+          </div>
+          <div className="space-y-2 pt-1 border-t border-border">
+            <Label htmlFor={`offer-ro-note-${item.id}`} className="text-sm">
+              Uwagi do tej pozycji
+            </Label>
+            <Textarea
+              id={`offer-ro-note-${item.id}`}
+              rows={2}
+              className="text-sm min-h-[52px] resize-y"
+              placeholder="Opcjonalnie — widoczne dla biura cateringowego"
+              value={lineNotes[item.id] ?? ""}
+              onChange={(e) => onLineNoteChange(item.id, e.target.value)}
+            />
           </div>
         </div>
       );
@@ -421,6 +481,8 @@ const OfferInteractive = () => {
   /** Tymczasowy tekst w polu ilości (wpisywanie wielocyfrowe) — czyszczony po blur / +/- */
   const [optionalQtyDraft, setOptionalQtyDraft] = useState<Record<string, string>>({});
   const [configurableQtyDraft, setConfigurableQtyDraft] = useState<Record<string, string>>({});
+  /** Uwagi per pozycja (orderItemId) — zsynchronizowane z order_items.offer_line_notes */
+  const [lineNotes, setLineNotes] = useState<Record<string, string>>({});
   const [orderEdit, setOrderEdit] = useState({
     guestCount: "",
     eventDate: "",
@@ -461,6 +523,11 @@ const OfferInteractive = () => {
       setConfigurableQuantities(initCfgQty);
       setOptionalQtyDraft({});
       setConfigurableQtyDraft({});
+      const initLineNotes: Record<string, string> = {};
+      for (const item of json.items) {
+        initLineNotes[item.id] = item.offerLineNotes ?? "";
+      }
+      setLineNotes(initLineNotes);
       setOrderEdit({
         guestCount: json.order.guestCount != null ? String(json.order.guestCount) : "",
         eventDate: json.order.eventDate ?? "",
@@ -560,10 +627,15 @@ const OfferInteractive = () => {
         eventTime: orderEdit.eventTime.trim() || null,
         deliveryAddress: orderEdit.deliveryAddress.trim() || null,
       };
+      const lineNotesPayload: Record<string, string> = {};
+      for (const item of data.items) {
+        lineNotesPayload[item.id] = lineNotes[item.id] ?? "";
+      }
       const res = (await putPublicOfferSelections(token, {
         selections,
         ...(Object.keys(lineQuantities).length > 0 ? { lineQuantities } : {}),
         orderDetails,
+        lineNotes: lineNotesPayload,
       })) as { message?: string };
       setSavedMsg(res.message ?? "Zapisano.");
       await load();
@@ -694,6 +766,8 @@ const OfferInteractive = () => {
               configurableQtyDraft={configurableQtyDraft}
               setConfigurableQtyDraft={setConfigurableQtyDraft}
               guestCountForSync={orderEdit.guestCount}
+              lineNote={lineNotes[item.id] ?? ""}
+              onLineNoteChange={(v) => setLineNotes((prev) => ({ ...prev, [item.id]: v }))}
             />
           ))}
 
@@ -712,6 +786,10 @@ const OfferInteractive = () => {
                   setOptionalQuantities={setOptionalQuantities}
                   optionalQtyDraft={optionalQtyDraft}
                   setOptionalQtyDraft={setOptionalQtyDraft}
+                  lineNotes={lineNotes}
+                  onLineNoteChange={(itemId, value) =>
+                    setLineNotes((prev) => ({ ...prev, [itemId]: value }))
+                  }
                 />
               </CardContent>
             </Card>
@@ -726,7 +804,13 @@ const OfferInteractive = () => {
                 </p>
               </CardHeader>
               <CardContent className="space-y-3">
-                <ReadOnlyLinesCard items={readOnlyLines} />
+                <ReadOnlyLinesCard
+                  items={readOnlyLines}
+                  lineNotes={lineNotes}
+                  onLineNoteChange={(itemId, value) =>
+                    setLineNotes((prev) => ({ ...prev, [itemId]: value }))
+                  }
+                />
               </CardContent>
             </Card>
           ) : null}

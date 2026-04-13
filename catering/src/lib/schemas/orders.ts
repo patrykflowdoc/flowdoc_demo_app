@@ -34,18 +34,35 @@ function boolLoose(v: unknown): boolean {
   return Boolean(v);
 }
 
+/** API/Prisma często zwraca `null` zamiast `""` — `z.string().default("")` wtedy rzuca „Expected string, received null”. */
+function zStr(defaultVal = "") {
+  return z.union([z.string(), z.null(), z.undefined()]).transform((v) =>
+    v == null || v === undefined ? defaultVal : String(v)
+  );
+}
+
+function zNumDefault(defaultVal: number) {
+  return z
+    .union([z.number(), z.string(), z.null(), z.undefined()])
+    .transform((v) => {
+      if (v == null || v === "") return defaultVal;
+      const n = Number(v);
+      return Number.isFinite(n) ? n : defaultVal;
+    });
+}
+
 /** Prisma Dish — czasem brak id; nie blokuj parsowania całej listy. */
 export const AdminOrderDishSchema = z
-  .object({ id: z.string().optional() })
+  .object({ id: z.string().nullable().optional() })
   .passthrough()
   .nullable()
   .optional();
 
 export const AdminOrderSubItemSchema = z.object({
-  id: z.string().optional(),
-  name: z.string().default(""),
+  id: z.string().nullable().optional(),
+  name: zStr(),
   quantity: DecimalJson.default(0),
-  unit: z.string().default("szt."),
+  unit: zStr("szt."),
   converter: DecimalJson.optional(),
   optionConverter: DecimalJson.optional(),
   groupConverter: DecimalJson.optional(),
@@ -56,10 +73,10 @@ export const AdminOrderSubItemSchema = z.object({
 });
 
 export const AdminOrderItemSchema = z.object({
-  id: z.string().optional(),
-  name: z.string().default(""),
+  id: z.string().nullable().optional(),
+  name: zStr(),
   quantity: DecimalJson.default(1),
-  unit: z.string().default("szt."),
+  unit: zStr("szt."),
   dishId: z.string().nullable().optional(),
   sourceProductId: z.string().nullable().optional(),
   orderEventDayId: z.string().nullable().optional(),
@@ -73,7 +90,7 @@ export const AdminOrderItemSchema = z.object({
     .transform((v) => (v == null ? true : boolLoose(v))),
   pricePerUnit: DecimalJson.default(0),
   total: DecimalJson.default(0),
-  itemType: z.string().default("simple"),
+  itemType: zStr("simple"),
   foodCostPerUnit: DecimalJson.optional(),
   subItems: z
     .array(AdminOrderSubItemSchema)
@@ -81,11 +98,14 @@ export const AdminOrderItemSchema = z.object({
     .optional()
     .transform((v) => v ?? []),
   dish: AdminOrderDishSchema,
+  offerLineServingTime: z.string().nullable().optional(),
+  offerLineNotes: z.string().nullable().optional(),
+  offerGroupMeta: z.record(z.unknown()).nullable().optional(),
 });
 
 export const AdminFoodCostExtraSchema = z.object({
-  id: z.string().optional(),
-  name: z.string().default(""),
+  id: z.string().nullable().optional(),
+  name: zStr(),
   amount: DecimalJson.default(0),
 });
 
@@ -94,12 +114,12 @@ export const CateringTypeSchema = z.enum(["wyjazdowy", "na_sali", "odbior_osobis
 export const AdminOrderSchema = z
   .object({
     id: z.string(),
-    orderNumber: z.string().default(""),
+    orderNumber: zStr(),
     publicOfferToken: z.string().nullable().optional(),
     clientId: z.string().nullable().optional(),
-    clientName: z.string().default(""),
-    clientEmail: z.string().default(""),
-    clientPhone: z.string().default(""),
+    clientName: zStr(),
+    clientEmail: zStr(),
+    clientPhone: zStr(),
     companyName: z.string().nullable().optional(),
     companyNip: z.string().nullable().optional(),
     contactCity: z.string().nullable().optional(),
@@ -109,12 +129,12 @@ export const AdminOrderSchema = z
     cateringType: CateringTypeLoose.optional(),
     eventDate: z.string().nullable().optional(),
     eventTime: z.string().nullable().optional(),
-    eventType: z.string().default(""),
+    eventType: zStr(),
     deliveryAddress: z.string().nullable().optional().transform((v) => v ?? ""),
     amount: DecimalJson.default(0),
     bail: DecimalJson.default(0),
-    status: z.string().default("Nowe zamówienie"),
-    notes: z.string().default(""),
+    status: zStr("Nowe zamówienie"),
+    notes: zStr(),
     createdAt: z.string().nullable().optional(),
     deliveryCost: DecimalJson.default(0),
     guestCount: DecimalJson.default(0),
@@ -133,12 +153,12 @@ export const AdminOrderSchema = z
     orderEventDays: z
       .array(
         z.object({
-          id: z.string(),
-          label: z.string().default(""),
+          id: z.union([z.string(), z.null(), z.undefined()]).transform((v) => (v == null ? "" : String(v))),
+          label: zStr(),
           date: z.string().nullable().optional(),
           startTime: z.string().nullable().optional(),
           endTime: z.string().nullable().optional(),
-          sortOrder: z.number().default(0),
+          sortOrder: zNumDefault(0),
           eventType: z.string().nullable().optional(),
           guestCount: z.number().nullable().optional(),
           deliveryAddress: z.string().nullable().optional(),

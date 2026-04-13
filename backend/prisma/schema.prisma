@@ -480,6 +480,12 @@ model OrderItem {
   offerClientAccepted Boolean @default(true) @map("offer_client_accepted")
   /// Powiązanie z dniem/sesją wydarzenia (null = pozycja ogólna).
   orderEventDayId     String? @map("order_event_day_id")
+  /// Jedna godzina podania na całą pozycję (także zestaw) — HH:mm, tylko panel admina.
+  offerLineServingTime String? @map("offer_line_serving_time")
+  /// Jedna notatka na całą pozycję (danie lub zestaw) — tylko panel admina.
+  offerLineNotes       String? @map("offer_line_notes")
+  /// Legacy JSON (uwagi per grupa); zastąpione przez offerLineNotes — zostaje dla starych rekordów.
+  offerGroupMeta      Json?   @map("offer_group_meta")
 
   order         Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
   subItems      OrderItemSubItem[]

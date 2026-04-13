@@ -4,6 +4,7 @@
 import { Router } from "express";
 import { prisma } from "../config/db.js";
 import { sumContributingOrderLineTotals } from "../utils/offerOrderAmount.js";
+import { sanitizeOfferLineNotes } from "../utils/offerLineNotes.js";
 
 const router = Router();
 
@@ -222,6 +223,10 @@ router.get("/offers/:token", async (req, res) => {
       offerClientToggle: Boolean(item.offerClientToggle),
       offerClientAccepted: Boolean(item.offerClientAccepted),
       orderEventDayId: item.orderEventDayId ?? null,
+      offerLineNotes:
+        item.offerLineNotes != null && String(item.offerLineNotes).trim() !== ""
+          ? String(item.offerLineNotes).trim()
+          : null,
       imageUrl: null,
       subItems: (item.subItems ?? []).map((s) => ({
         id: s.id,
@@ -290,7 +295,7 @@ router.get("/offers/:token", async (req, res) => {
 
 /**
  * PUT /api/public/offers/:token
- * body: { selections?, toggles?, lineQuantities?: { [orderItemId]: number } (także dla zestawów configurable), orderDetails?: { guestCount?, eventDate?, eventTime?, deliveryAddress? } }
+ * body: { selections?, toggles?, lineQuantities?, lineNotes?: { [orderItemId]: string }, orderDetails?, dayOrderDetails? }
  */
 router.put("/offers/:token", async (req, res) => {
   const token = String(req.params.token || "").trim();
@@ -306,6 +311,7 @@ router.put("/offers/:token", async (req, res) => {
   const lineQuantities = req.body?.lineQuantities;
   const orderDetails = req.body?.orderDetails;
   const dayOrderDetails = req.body?.dayOrderDetails;
+  const lineNotes = req.body?.lineNotes;
   if (selections != null && typeof selections !== "object") {
     return res.status(400).json({ error: "Nieprawidłowy format (selections)." });
   }
@@ -320,6 +326,9 @@ router.put("/offers/:token", async (req, res) => {
   }
   if (dayOrderDetails != null && !Array.isArray(dayOrderDetails)) {
     return res.status(400).json({ error: "Nieprawidłowy format (dayOrderDetails)." });
+  }
+  if (lineNotes != null && (typeof lineNotes !== "object" || Array.isArray(lineNotes))) {
+    return res.status(400).json({ error: "Nieprawidłowy format (lineNotes)." });
   }
 
   const selMap = selections && typeof selections === "object" ? selections : {};
@@ -467,6 +476,19 @@ router.put("/offers/:token", async (req, res) => {
             total: pricePerUnit * lineQty,
           },
         });
+      }
+
+      if (lineNotes != null && typeof lineNotes === "object" && !Array.isArray(lineNotes)) {
+        const allowedIds = new Set(order.orderItems.map((i) => i.id));
+        for (const [rawId, rawVal] of Object.entries(lineNotes)) {
+          const id = String(rawId ?? "").trim();
+          if (!id || !allowedIds.has(id)) continue;
+          const sanitized = sanitizeOfferLineNotes(rawVal);
+          await tx.orderItem.update({
+            where: { id },
+            data: { offerLineNotes: sanitized },
+          });
+        }
       }
 
       const lines = await tx.orderItem.findMany({

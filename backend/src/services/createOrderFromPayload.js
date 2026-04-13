@@ -1,5 +1,7 @@
 import { sendOrderPlacedAdminEmail, sendOrderPlacedClientEmail } from "../utils/mail.js";
 import { dishIdIfExists } from "../utils/dishFk.js";
+import { sanitizeOfferLineNotes } from "../utils/offerLineNotes.js";
+import { sanitizeOfferLineServingTime } from "../utils/offerLineServingTime.js";
 
 function numOr(value, fallback = 0) {
   const n = Number(value);
@@ -212,6 +214,9 @@ export async function createOrderFromPayload(
           offerClientAccepted: Boolean(item.offerClientToggle)
             ? Boolean(item.offerClientAccepted)
             : true,
+          offerLineServingTime: sanitizeOfferLineServingTime(item.offerLineServingTime) ?? undefined,
+          offerLineNotes: sanitizeOfferLineNotes(item.offerLineNotes) ?? undefined,
+          offerGroupMeta: null,
         },
       });
 
