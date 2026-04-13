@@ -42,12 +42,14 @@ services:
     environment:
       # W kontenerze zostaje 25044 (mapowanie host 25144 → 25044). Lokalne `npm run dev` używa PORT z .env (25144).
       - PORT=25044
+      - NODE_EXTRA_CA_CERTS=/app/certs/ca-certificate.crt
     env_file:
       - ./backend/.env
     volumes:
       - ./backend:/app
       - /app/node_modules  # zachowaj node_modules z obrazu (zawiera dotenv itd.)
       - uploads_data:/app/uploads
+      - ./backend/certs:/app/certs
     networks:
       - szczypta-smaku
     depends_on:
