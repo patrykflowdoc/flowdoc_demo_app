@@ -12,6 +12,8 @@ import { requireCsrf } from "../middleware/csrf.js";
 import { createOrderFromPayload } from "../services/createOrderFromPayload.js";
 import { sumContributingOrderLineTotals } from "../utils/offerOrderAmount.js";
 import { dishIdIfExists } from "../utils/dishFk.js";
+import { sanitizeOfferLineNotes } from "../utils/offerLineNotes.js";
+import { sanitizeOfferLineServingTime } from "../utils/offerLineServingTime.js";
 import {
   createImageMulter,
   deleteStoredUploadIfAppOwned,
@@ -26,6 +28,51 @@ router.use(requireAuth);
 function numOrAdminOrder(value, fallback = 0) {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
+}
+
+/** Prisma `OrderItem.quantity` jest Int — ułamki / stringi z JSON muszą być obcięte. */
+function orderItemQuantityInt(raw) {
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return 1;
+  const i = Math.trunc(n);
+  if (i < 1) return 1;
+  if (i > 999999) return 999999;
+  return i;
+}
+
+function orderItemUnit(raw) {
+  if (raw == null) return "szt.";
+  const s = String(raw).trim();
+  return s.length > 0 ? s : "szt.";
+}
+
+function orderItemTypeStr(raw) {
+  const s = raw != null ? String(raw).trim() : "";
+  return s.length > 0 ? s : "simple";
+}
+
+/** Prisma @db.Date — akceptuje YYYY-MM-DD oraz zapis zwarty YYYYMMDD (błędny klient / legacy). */
+function normalizePatchEventDate(raw) {
+  if (raw == null || raw === "") return null;
+  const s = String(raw).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return new Date(`${s}T12:00:00.000Z`);
+  if (/^\d{8}$/.test(s)) {
+    return new Date(`${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}T12:00:00.000Z`);
+  }
+  const d = new Date(s);
+  return Number.isFinite(d.getTime()) ? d : null;
+}
+
+/** Prisma @db.Time — naprawia ISO bez myślników w części daty (np. 19700101T21:00:00.000Z). */
+function normalizePatchEventTime(raw) {
+  if (raw == null || raw === "") return null;
+  let s = String(raw).trim();
+  const compact = /^(\d{4})(\d{2})(\d{2})T(.*)$/i.exec(s);
+  if (compact) {
+    s = `${compact[1]}-${compact[2]}-${compact[3]}T${compact[4]}`;
+  }
+  const d = new Date(s);
+  return Number.isFinite(d.getTime()) ? d : null;
 }
 
 /** PATCH body: only provided fields; numeric fields coerced from string. */
@@ -404,7 +451,15 @@ router.post("/orders", requireCsrf, async (req, res) => {
 /** PATCH /api/admin/orders/:id */
 router.patch("/orders/:id", requireCsrf, async (req, res) => {
   const id = req.params.id;
-  const {orderItems, orderFoodCostExtras, orderEventDays, ...data} = req.body;
+  try {
+  const {orderItems, orderFoodCostExtras, orderEventDays, ...rest} = req.body;
+  const data = { ...rest };
+  if (Object.prototype.hasOwnProperty.call(data, "eventDate")) {
+    data.eventDate = normalizePatchEventDate(data.eventDate);
+  }
+  if (Object.prototype.hasOwnProperty.call(data, "eventTime")) {
+    data.eventTime = normalizePatchEventTime(data.eventTime);
+  }
   if (Object.keys(data).length > 0) {
     await prisma.order.update({ where: { id }, data });
   }
@@ -458,12 +513,12 @@ router.patch("/orders/:id", requireCsrf, async (req, res) => {
       const created = await prisma.orderItem.create({
         data: {
           orderId: id,
-          name: String(it.name),
-          quantity: Number(it.quantity) || 1,
-          unit: it.unit,
+          name: String(it.name ?? ""),
+          quantity: orderItemQuantityInt(it.quantity),
+          unit: orderItemUnit(it.unit),
           pricePerUnit: Number(it.pricePerUnit),
           total: Number(it.total) ?? 0,
-          itemType: it.itemType,
+          itemType: orderItemTypeStr(it.itemType),
           foodCostPerUnit:
             it.foodCostPerUnit != null
               ? Number(it.foodCostPerUnit)
@@ -479,15 +534,18 @@ router.patch("/orders/:id", requireCsrf, async (req, res) => {
             ? Boolean(it.offerClientAccepted)
             : true,
           orderEventDayId: eventDayId,
+          offerLineServingTime: sanitizeOfferLineServingTime(it.offerLineServingTime) ?? undefined,
+          offerLineNotes: sanitizeOfferLineNotes(it.offerLineNotes) ?? undefined,
+          offerGroupMeta: null,
         },
       });
       if (Array.isArray(it.subItems) && it.subItems.length > 0) {
         const subRows = await Promise.all(
           it.subItems.map(async (s) => ({
             orderItemId: created.id,
-            name: String(s.name),
+            name: String(s.name ?? ""),
             quantity: numOrAdminOrder(s.quantity, 0),
-            unit: s.unit,
+            unit: orderItemUnit(s.unit),
             foodCostPerUnit: numOrAdminOrder(s.foodCostPerUnit, 0),
             pricePerUnit: numOrAdminOrder(s.pricePerUnit, 0),
             converter: numOrAdminOrder(s.converter, 1),
@@ -535,6 +593,22 @@ router.patch("/orders/:id", requireCsrf, async (req, res) => {
     },
   });
   res.json(updated);
+  } catch (err) {
+    console.error("PATCH /api/admin/orders/:id", err);
+    const msg = err instanceof Error ? err.message : String(err);
+    const code = err && typeof err === "object" && "code" in err ? String(err.code) : "";
+    if (code === "P2003") {
+      return res.status(400).json({
+        error:
+          "Błąd powiązania z daniem w bazie (np. przestarzałe ID). Odśwież panel i dodaj pozycję ponownie.",
+        detail: msg,
+      });
+    }
+    res.status(500).json({
+      error: "Nie udało się zapisać zamówienia.",
+      detail: process.env.NODE_ENV !== "production" ? msg : undefined,
+    });
+  }
 });
 
 /** DELETE /api/admin/orders/:id */

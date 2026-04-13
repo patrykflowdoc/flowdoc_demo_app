@@ -53,6 +53,10 @@ export type OrderItem = {
   offerClientAccepted?: boolean;
   /** Przypisanie do dnia/sesji wydarzenia. */
   orderEventDayId?: string | null;
+  /** Jedna godzina podania na całą pozycję (HH:mm) — tylko admin. */
+  offerLineServingTime?: string | null;
+  /** Jedna notatka na całą pozycję (danie lub zestaw) — tylko admin. */
+  offerLineNotes?: string | null;
   dish?: Dish;
   subItems: OrderSubItem[] | null;
 };

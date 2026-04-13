@@ -14,6 +14,8 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { cn, randomUUID } from "@/lib/utils";
+import { toApiEventDateOrNull } from "@/lib/orderDates";
+import { ServingTimePick } from "@/components/catering/ServingTimeAndNotes";
 import { toast } from "@/components/ui/sonner";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
@@ -846,6 +848,21 @@ const OrderDetailView = ({
   );
 };
 
+/** Spójnie z API / Prisma Int — unikamy ułamków i NaN przy zapisie. */
+function clampOrderLineQuantity(q: unknown): number {
+  const n = Number(q);
+  if (!Number.isFinite(n)) return 1;
+  const i = Math.trunc(n);
+  if (i < 1) return 1;
+  if (i > 999999) return 999999;
+  return i;
+}
+
+function safeOrderLineUnit(u: unknown): string {
+  const s = u != null ? String(u).trim() : "";
+  return s.length > 0 ? s : "szt.";
+}
+
 // ===== ORDER EDIT VIEW =====
 const OrderEditView = ({ order, onBack, onSave }: { order: Order; onBack: () => void; onSave: (o: Order) => void }) => {
   const [status, setStatus] = useState<OrderStatus>(order.status);
@@ -870,7 +887,9 @@ const OrderEditView = ({ order, onBack, onSave }: { order: Order; onBack: () => 
   const updateItem = (index: number, field: "quantity" | "pricePerUnit", value: number) => {
     setItems(prev => prev.map((item, i) => {
       if (i !== index) return item;
-      const updated = { ...item, [field]: value };
+      const nextQty = field === "quantity" ? clampOrderLineQuantity(value) : item.quantity;
+      const nextPrice = field === "pricePerUnit" ? Math.max(0, Number.isFinite(value) ? value : 0) : item.pricePerUnit;
+      const updated = { ...item, quantity: nextQty, pricePerUnit: nextPrice };
       updated.total = updated.quantity * updated.pricePerUnit;
       return updated;
     }));
@@ -878,6 +897,24 @@ const OrderEditView = ({ order, onBack, onSave }: { order: Order; onBack: () => 
 
   const removeItem = (index: number) => {
     setItems(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const updateLineServingTime = (index: number, value: string) => {
+    setItems((prev) =>
+      prev.map((it, i) =>
+        i === index ? { ...it, offerLineServingTime: value.trim() !== "" ? value.trim() : null } : it
+      )
+    );
+  };
+
+  const updateLineNotes = (index: number, notes: string) => {
+    setItems((prev) =>
+      prev.map((it, i) =>
+        i === index
+          ? { ...it, offerLineNotes: notes.trim() !== "" ? notes.trim() : null }
+          : it
+      )
+    );
   };
 
   const setOfferClientToggleRow = (index: number, enabled: boolean) => {
@@ -904,6 +941,8 @@ const OrderEditView = ({ order, onBack, onSave }: { order: Order; onBack: () => 
       sourceProductId: product.id,
       orderEventDayId: null,
       subItems: null,
+      offerLineServingTime: null,
+      offerLineNotes: null,
     }]);
     setAddPanelOpen(false);
     setAddSearch("");
@@ -927,6 +966,8 @@ const OrderEditView = ({ order, onBack, onSave }: { order: Order; onBack: () => 
       sourceProductId: configuringProduct.id,
       orderEventDayId: null,
       subItems: subItems ?? null,
+      offerLineServingTime: null,
+      offerLineNotes: null,
     }]);
     setConfiguringProduct(null);
     setAddPanelOpen(false);
@@ -952,7 +993,7 @@ const OrderEditView = ({ order, onBack, onSave }: { order: Order; onBack: () => 
   const finalAmount = totalAmount - discount;
 
   const handleSave = () => {
-    const dateIsoEff = eventDateIso.trim() || null;
+    const dateIsoEff = toApiEventDateOrNull(eventDateIso);
     const timeHmEff = eventTimeHHMM.trim() || null;
     const dateDisplay = dateIsoEff
       ? formatOrderDate(`${dateIsoEff}T12:00:00.000Z`)
@@ -988,7 +1029,7 @@ const OrderEditView = ({ order, onBack, onSave }: { order: Order; onBack: () => 
   const addonRows = allRowsIndexed.filter(({ item }) => isAddonLineItem(effectiveLineItemType(item)));
 
   const renderEditRow = ({ item, index }: { item: OrderItem; index: number }) => (
-    <TableRow key={index}>
+    <TableRow key={item.id != null && String(item.id).length > 0 ? String(item.id) : `line-${index}`}>
       <TableCell>
         <div className="space-y-1">
           <span className="font-medium">{item.name}</span>
@@ -1015,12 +1056,32 @@ const OrderEditView = ({ order, onBack, onSave }: { order: Order; onBack: () => 
             <button
               type="button"
               onClick={() => startEditSubItems(index)}
-              className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-0.5"
+              className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-2"
             >
               <Settings2 className="w-3 h-3" />
               Edytuj wybory menu
             </button>
           )}
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 w-full min-w-0">
+            {!isAddonLineItem(effectiveLineItemType(item)) ? (
+              <ServingTimePick
+                inline
+                label="Podanie"
+                time={item.offerLineServingTime ?? ""}
+                onTimeChange={(t) => updateLineServingTime(index, t)}
+              />
+            ) : null}
+            <div className="flex min-w-0 max-w-full flex-1 items-center gap-1.5 basis-[min(100%,20rem)] sm:min-w-[12rem] sm:max-w-md">
+              <span className="text-xs text-muted-foreground shrink-0">Uwagi</span>
+              <Input
+                value={item.offerLineNotes ?? ""}
+                title={(item.offerLineNotes ?? "").trim() || undefined}
+                onChange={(e) => updateLineNotes(index, e.target.value)}
+                placeholder="Uwagi do pozycji…"
+                className="h-8 min-w-0 flex-1 text-xs"
+              />
+            </div>
+          </div>
         </div>
       </TableCell>
       <TableCell className="text-center">
@@ -1028,8 +1089,8 @@ const OrderEditView = ({ order, onBack, onSave }: { order: Order; onBack: () => 
           <Input
             type="number"
             min={1}
-            value={item.quantity}
-            onChange={(e) => updateItem(index, "quantity", Math.max(1, parseInt(e.target.value, 10) || 1))}
+            value={clampOrderLineQuantity(item.quantity)}
+            onChange={(e) => updateItem(index, "quantity", parseInt(e.target.value, 10) || 1)}
             className="w-20 h-8 text-center text-sm"
           />
           <span className="text-xs text-muted-foreground">{item.unit}</span>
@@ -1823,7 +1884,7 @@ const OrdersView = () => {
   };
 
   const handleSaveOrder = async (updated: Order) => {
-    setOrders(orders.map((o) => o.id === updated.id ? updated : o));
+    setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
     setSelectedOrder(updated);
     setView("detail");
 
@@ -1835,10 +1896,7 @@ const OrdersView = () => {
           eventType: updated.event?.trim() ? updated.event.trim() : null,
           guestCount: updated.guestCount ?? 0,
           deliveryAddress: updated.deliveryAddress,
-          eventDate:
-            updated.eventDateIso != null && String(updated.eventDateIso).trim() !== ""
-              ? String(updated.eventDateIso).trim().slice(0, 10)
-              : null,
+          eventDate: toApiEventDateOrNull(updated.eventDateIso),
           eventTime:
             updated.eventTimeHHMM != null && String(updated.eventTimeHHMM).trim() !== ""
               ? `1970-01-01T${String(updated.eventTimeHHMM).trim()}:00.000Z`
@@ -1849,8 +1907,8 @@ const OrdersView = () => {
           orderEventDays: [],
           orderItems: updated.items.map((item) => ({
             name: item.name,
-            quantity: item.quantity,
-            unit: item.unit,
+            quantity: clampOrderLineQuantity(item.quantity),
+            unit: safeOrderLineUnit(item.unit),
             pricePerUnit: item.pricePerUnit,
             total: item.total,
             itemType: item.type || item.itemType || "simple",
@@ -1861,10 +1919,20 @@ const OrdersView = () => {
             offerClientAccepted:
               item.offerClientToggle === true ? Boolean(item.offerClientAccepted) : true,
             orderEventDayId: null,
+            offerLineServingTime:
+              isAddonLineItem(effectiveLineItemType(item))
+                ? null
+                : item.offerLineServingTime != null && String(item.offerLineServingTime).trim() !== ""
+                  ? String(item.offerLineServingTime).trim()
+                  : null,
+            offerLineNotes:
+              item.offerLineNotes != null && String(item.offerLineNotes).trim() !== ""
+                ? String(item.offerLineNotes).trim()
+                : null,
             subItems: (item.subItems ?? []).map((sub) => ({
               name: sub.name,
               quantity: sub.quantity,
-              unit: sub.unit,
+              unit: safeOrderLineUnit(sub.unit),
               converter: sub.converter ?? 1,
               optionConverter: sub.optionConverter ?? 1,
               groupConverter: sub.groupConverter ?? 1,
@@ -1875,8 +1943,9 @@ const OrdersView = () => {
           })),
         });
         toast.success("Zamówienie zapisane");
-      } catch {
-        toast.error("Błąd zapisu zamówienia");
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Błąd zapisu zamówienia";
+        toast.error(msg);
       }
     }
   };
@@ -1992,9 +2061,9 @@ const OrdersView = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((order) => (
+              {filtered.map((order, rowIdx) => (
                 <TableRow
-                  key={order.id}
+                  key={order.dbId || `order-row-${rowIdx}`}
                   className="group/ordRow cursor-pointer"
                   onClick={() => {
                     if (suppressOrdersListRowClickRef.current) {

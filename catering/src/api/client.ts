@@ -376,6 +376,8 @@ export async function putPublicOfferSelections(
       deliveryAddress?: string | null;
       eventType?: string | null;
     }>;
+    /** Uwagi per pozycja zamówienia (orderItemId → tekst); ta sama kolumna co w panelu admina. */
+    lineNotes?: Record<string, string>;
   }
 ): Promise<unknown> {
   const payload: Record<string, unknown> = {
@@ -384,6 +386,9 @@ export async function putPublicOfferSelections(
   if (body.toggles && Object.keys(body.toggles).length > 0) payload.toggles = body.toggles;
   if (body.lineQuantities && Object.keys(body.lineQuantities).length > 0) {
     payload.lineQuantities = body.lineQuantities;
+  }
+  if (body.lineNotes != null) {
+    payload.lineNotes = body.lineNotes;
   }
   if (body.orderDetails && Object.keys(body.orderDetails).length > 0) {
     payload.orderDetails = body.orderDetails;

@@ -4,7 +4,7 @@ import { TableCell, TableRow, Table, TableBody } from "../ui/table";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../ui/collapsible";
 import { cn } from "@/lib/utils";
 import type { OrderItem } from "@/types/orders";
-
+import { effectiveLineItemType, isAddonLineItem } from "@/lib/orderLineItems";
 /** Skład dania — zwinięty domyślnie (jak szczegóły wariantów w edycji). */
 export function OrderLineDishContents({
   contents,
@@ -43,6 +43,20 @@ export const ProductTable = ({ items }: { items: OrderItem[] }) => (
           <TableCell className="font-medium">
             <div>{item.name}</div>
             <OrderLineDishContents contents={item.dish?.contents} />
+            {!isAddonLineItem(effectiveLineItemType(item)) &&
+            item.offerLineServingTime != null &&
+            String(item.offerLineServingTime).trim() !== "" ? (
+              <p className="mt-1.5 text-xs">
+                <span className="text-muted-foreground">Godzina podania: </span>
+                <span className="font-medium tabular-nums text-foreground">{String(item.offerLineServingTime).trim()}</span>
+              </p>
+            ) : null}
+            {item.offerLineNotes != null && String(item.offerLineNotes).trim() !== "" ? (
+              <p className="mt-1.5 text-xs text-muted-foreground max-w-md">
+                <span className="font-medium text-foreground">Uwagi: </span>
+                {String(item.offerLineNotes).trim()}
+              </p>
+            ) : null}
           </TableCell>
           <TableCell className="text-center">
             {item.quantity} {item.unit}

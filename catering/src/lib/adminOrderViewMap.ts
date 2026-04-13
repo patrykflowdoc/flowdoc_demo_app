@@ -1,5 +1,6 @@
 import type { Dish } from "@/data/products";
 import type { AdminOrder } from "@/lib/schemas/orders";
+import { toHtmlDateValue } from "@/lib/orderDates";
 import type { Order, OrderEventDay, OrderItem, OrderStatus } from "@/types/orders";
 import type { CateringType } from "@/lib/pricing";
 
@@ -41,11 +42,40 @@ export function mapAdminApiOrderToOrder(
 ): Order {
   const orderItems = o.orderItems ?? [];
   const items: OrderItem[] = orderItems.map((item) => {
-    const { dish: apiDish, subItems: apiSubs, ...itemRest } = item;
+    const {
+      dish: apiDish,
+      subItems: apiSubs,
+      offerGroupMeta: metaRaw,
+      offerLineNotes: notesRaw,
+      id: itemIdRaw,
+      ...itemRest
+    } = item;
+    const offerLineNotes = (() => {
+      const fromCol =
+        notesRaw != null && String(notesRaw).trim() !== "" ? String(notesRaw).trim() : null;
+      if (fromCol) return fromCol;
+      if (metaRaw == null || typeof metaRaw !== "object" || Array.isArray(metaRaw)) return null;
+      const parts: string[] = [];
+      for (const v of Object.values(metaRaw)) {
+        if (v == null || typeof v !== "object" || Array.isArray(v)) continue;
+        const n = (v as { notes?: unknown }).notes;
+        if (typeof n === "string" && n.trim()) parts.push(n.trim());
+      }
+      return parts.length > 0 ? parts.join(" · ") : null;
+    })();
+    const offerLineServingTime =
+      item.offerLineServingTime != null && String(item.offerLineServingTime).trim() !== ""
+        ? String(item.offerLineServingTime).trim()
+        : null;
     return {
       ...itemRest,
+      ...(itemIdRaw != null && String(itemIdRaw).trim() !== ""
+        ? { id: String(itemIdRaw).trim() }
+        : {}),
       type: item.itemType,
       dishId: item.dishId ?? undefined,
+      offerLineServingTime,
+      offerLineNotes,
       sourceProductId:
         item.sourceProductId != null && String(item.sourceProductId).trim() !== ""
           ? String(item.sourceProductId)
@@ -56,9 +86,12 @@ export function mapAdminApiOrderToOrder(
       orderEventDayId: item.orderEventDayId ?? null,
       dish: mapApiDishToOrderDish(apiDish),
       subItems: (apiSubs ?? []).map((sub) => {
-        const { dish: apiSubDish, ...subRest } = sub;
+        const { dish: apiSubDish, id: subIdRaw, ...subRest } = sub;
         return {
           ...subRest,
+          ...(subIdRaw != null && String(subIdRaw).trim() !== ""
+            ? { id: String(subIdRaw).trim() }
+            : {}),
           dishId: sub.dishId ?? undefined,
           dish: mapApiDishToOrderDish(apiSubDish),
         };
@@ -105,7 +138,7 @@ export function mapAdminApiOrderToOrder(
     time: formatOrderTime(o.eventTime != null ? String(o.eventTime) : null),
     eventDateIso:
       o.eventDate != null && String(o.eventDate).trim() !== ""
-        ? String(o.eventDate).slice(0, 10)
+        ? toHtmlDateValue(o.eventDate) || null
         : null,
     eventTimeHHMM:
       o.eventTime != null && String(o.eventTime).trim() !== ""
