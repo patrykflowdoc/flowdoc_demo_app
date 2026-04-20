@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Plus, Trash2, GripVertical, icons, AlertCircle } from "lucide-react";
+import { Plus, Trash2, GripVertical, icons, AlertCircle, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import * as api from "@/api/client";
@@ -44,7 +44,7 @@ const popularIcons: LucideIconName[] = [
 const IconPickerSmall = ({ value, onChange }: { value: LucideIconName; onChange: (v: LucideIconName) => void }) => {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const CurrentIcon = icons[value];
+  const CurrentIcon = icons[value] as LucideIcon;
 
   const allIcons = search.trim()
     ? (Object.keys(icons) as LucideIconName[]).filter((n) => n.toLowerCase().includes(search.toLowerCase())).slice(0, 30)
@@ -64,7 +64,7 @@ const IconPickerSmall = ({ value, onChange }: { value: LucideIconName; onChange:
           <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Szukaj ikony..." className="h-8 text-xs" autoFocus />
           <div className="grid grid-cols-6 gap-1 max-h-32 overflow-y-auto">
             {allIcons.map((name) => {
-              const Icon = icons[name];
+              const Icon = icons[name] as LucideIcon;
               return (
                 <button key={name} type="button" onClick={() => { onChange(name); setOpen(false); setSearch(""); }}
                   className={cn("w-8 h-8 rounded-md flex items-center justify-center hover:bg-accent transition-colors", value === name && "bg-primary text-primary-foreground")}
@@ -101,51 +101,74 @@ const SettingsFormView = () => {
 
   useEffect(() => {
     const fetchData = async () => {
-      const [catsRes, evtsRes, mappingsRes, exCatsRes, exMappingsRes] = await Promise.all([
-        api.getAdminProductCategories(),
-        api.getAdminEventTypes(),
-        api.getAdminEventCategoryMappings(),
-        api.getAdminExtrasCategories(),
-        api.getAdminEventExtrasCategoryMappings(),
-      ]);
-      const cats = (Array.isArray(catsRes) ? catsRes : []) as Record<string, unknown>[];
-      const evts = (Array.isArray(evtsRes) ? evtsRes : []) as Record<string, unknown>[];
-      const mappings = (Array.isArray(mappingsRes) ? mappingsRes : []) as Record<string, unknown>[];
-      const exCats = (Array.isArray(exCatsRes) ? exCatsRes : []) as Record<string, unknown>[];
-      const exMappings = (Array.isArray(exMappingsRes) ? exMappingsRes : []) as Record<string, unknown>[];
+      try {
+        const [catsRes, evtsRes, mappingsRes, exCatsRes, exMappingsRes] = await Promise.all([
+          api.getAdminProductCategories(),
+          api.getAdminEventTypes(),
+          api.getAdminEventCategoryMappings(),
+          api.getAdminExtrasCategories(),
+          api.getAdminEventExtrasCategoryMappings(),
+        ]);
+        const cats = (Array.isArray(catsRes) ? catsRes : []) as Record<string, unknown>[];
+        const evts = (Array.isArray(evtsRes) ? evtsRes : []) as Record<string, unknown>[];
+        const mappings = (Array.isArray(mappingsRes) ? mappingsRes : []) as Record<string, unknown>[];
+        const exCats = (Array.isArray(exCatsRes) ? exCatsRes : []) as Record<string, unknown>[];
+        const exMappings = (Array.isArray(exMappingsRes) ? exMappingsRes : []) as Record<string, unknown>[];
 
-      setCategories(cats.map((c) => ({
-        id: String(c.id), name: String(c.name ?? ""), description: String(c.description ?? ""),
-        icon: (c.icon as LucideIconName) || "Salad", slug: String(c.slug ?? ""),
-      })));
+        setCategories(cats.map((c) => {
+          const iconName = String(c.icon ?? "");
+          if (!(iconName in icons)) {
+            throw new Error(`Nieznana ikona kategorii produktu: "${iconName}" (id: ${String(c.id)})`);
+          }
+          return {
+            id: String(c.id), name: String(c.name ?? ""), description: String(c.description ?? ""),
+            icon: iconName as LucideIconName, slug: String(c.slug ?? ""),
+          };
+        }));
 
-      setExtrasCategories(exCats.map((c) => ({
-        id: String(c.id), name: String(c.name ?? ""), description: String(c.description ?? ""),
-        icon: (c.icon as LucideIconName) || "Sparkles", slug: String(c.slug ?? ""),
-        isRequired: Boolean(c.isRequired),
-      })));
+        setExtrasCategories(exCats.map((c) => {
+          const iconName = String(c.icon ?? "");
+          if (!(iconName in icons)) {
+            throw new Error(`Nieznana ikona kategorii dodatków: "${iconName}" (id: ${String(c.id)})`);
+          }
+          return {
+            id: String(c.id), name: String(c.name ?? ""), description: String(c.description ?? ""),
+            icon: iconName as LucideIconName, slug: String(c.slug ?? ""),
+            isRequired: Boolean(c.isRequired),
+          };
+        }));
 
-      const mappingsByEvent: Record<string, string[]> = {};
-      mappings.forEach((m) => {
-        const eid = String(m.eventTypeId);
-        const cid = String(m.categoryId);
-        if (!mappingsByEvent[eid]) mappingsByEvent[eid] = [];
-        mappingsByEvent[eid].push(cid);
-      });
-      const extrasMappingsByEvent: Record<string, string[]> = {};
-      exMappings.forEach((m) => {
-        const eid = String(m.eventTypeId);
-        const exid = String(m.extrasCategoryId);
-        if (!extrasMappingsByEvent[eid]) extrasMappingsByEvent[eid] = [];
-        extrasMappingsByEvent[eid].push(exid);
-      });
-      setEvents(evts.map((e) => ({
-        id: String(e.id), name: String(e.name ?? ""),
-        icon: (e.icon as LucideIconName) || "CalendarDays",
-        allowedCategoryIds: mappingsByEvent[String(e.id)] || [],
-        allowedExtrasCategoryIds: extrasMappingsByEvent[String(e.id)] || [],
-      })));
-      setLoading(false);
+        const mappingsByEvent: Record<string, string[]> = {};
+        mappings.forEach((m) => {
+          const eid = String(m.eventTypeId);
+          const cid = String(m.categoryId);
+          if (!mappingsByEvent[eid]) mappingsByEvent[eid] = [];
+          mappingsByEvent[eid].push(cid);
+        });
+        const extrasMappingsByEvent: Record<string, string[]> = {};
+        exMappings.forEach((m) => {
+          const eid = String(m.eventTypeId);
+          const exid = String(m.extrasCategoryId);
+          if (!extrasMappingsByEvent[eid]) extrasMappingsByEvent[eid] = [];
+          extrasMappingsByEvent[eid].push(exid);
+        });
+        setEvents(evts.map((e) => {
+          const iconName = String(e.icon ?? "");
+          if (!(iconName in icons)) {
+            throw new Error(`Nieznana ikona typu wydarzenia: "${iconName}" (id: ${String(e.id)})`);
+          }
+          return {
+            id: String(e.id), name: String(e.name ?? ""),
+            icon: iconName as LucideIconName,
+            allowedCategoryIds: mappingsByEvent[String(e.id)] || [],
+            allowedExtrasCategoryIds: extrasMappingsByEvent[String(e.id)] || [],
+          };
+        }));
+      } catch (err: unknown) {
+        toast.error("Błąd ładowania formularza: " + (err instanceof Error ? err.message : String(err)));
+      } finally {
+        setLoading(false);
+      }
     };
     fetchData();
   }, []);
@@ -163,11 +186,15 @@ const SettingsFormView = () => {
         slug,
         sortOrder: nextOrder,
       }) as Record<string, unknown>;
+      const iconName = String(data.icon ?? "");
+      if (!(iconName in icons)) {
+        throw new Error(`Nieznana ikona nowej kategorii produktu: "${iconName}" (id: ${String(data.id)})`);
+      }
       setCategories([...categories, {
         id: String(data.id),
         name: String(data.name ?? ""),
         description: String(data.description ?? ""),
-        icon: (data.icon as LucideIconName) || "Salad",
+        icon: iconName as LucideIconName,
         slug: String(data.slug ?? ""),
       }]);
     } catch (err: unknown) {
@@ -235,9 +262,13 @@ const SettingsFormView = () => {
         sortOrder: nextOrder,
         isRequired: newExCatRequired,
       }) as Record<string, unknown>;
+      const iconName = String(data.icon ?? "");
+      if (!(iconName in icons)) {
+        throw new Error(`Nieznana ikona nowej kategorii dodatków: "${iconName}" (id: ${String(data.id)})`);
+      }
       setExtrasCategories([...extrasCategories, {
         id: String(data.id), name: String(data.name ?? ""), description: String(data.description ?? ""),
-        icon: (data.icon as LucideIconName) || "Sparkles", slug: String(data.slug ?? ""),
+        icon: iconName as LucideIconName, slug: String(data.slug ?? ""),
         isRequired: Boolean(data.isRequired),
       }]);
     } catch (err: unknown) {
@@ -352,7 +383,11 @@ const SettingsFormView = () => {
             )}
 
             {categories.map((cat) => {
-              const CatIcon = icons[cat.icon];
+              const catIconName = String(cat.icon ?? "");
+              if (!(catIconName in icons)) {
+                throw new Error(`Nieznana ikona kategorii: "${catIconName}" (id=${String(cat.id)})`);
+              }
+              const CatIcon = icons[catIconName as LucideIconName] as LucideIcon;
               return (
                 <div key={cat.id} className="flex items-center gap-3 px-4 py-3 rounded-lg bg-muted/30 group hover:bg-muted/50 transition-colors">
                   <GripVertical className="w-4 h-4 text-muted-foreground/40 cursor-grab" />
@@ -412,7 +447,7 @@ const SettingsFormView = () => {
             )}
 
             {extrasCategories.map((cat) => {
-              const CatIcon = icons[cat.icon];
+              const CatIcon = icons[cat.icon] as LucideIcon;
               return (
                 <div key={cat.id} className="flex items-center gap-3 px-4 py-3 rounded-lg bg-muted/30 group hover:bg-muted/50 transition-colors">
                   <GripVertical className="w-4 h-4 text-muted-foreground/40 cursor-grab" />
@@ -464,7 +499,7 @@ const SettingsFormView = () => {
           <CardContent>
             <div className="space-y-4">
               {events.map((event) => {
-                const EventIcon = icons[event.icon];
+                const EventIcon = icons[event.icon] as LucideIcon;
                 return (
                   <div key={event.id} className="p-4 rounded-lg border border-border">
                     <div className="flex items-center gap-3 mb-3">
@@ -510,7 +545,7 @@ const SettingsFormView = () => {
           <CardContent>
             <div className="space-y-4">
               {events.map((event) => {
-                const EventIcon = icons[event.icon];
+                const EventIcon = icons[event.icon] as LucideIcon;
                 return (
                   <div key={event.id} className="p-4 rounded-lg border border-border">
                     <div className="flex items-center gap-3 mb-3">

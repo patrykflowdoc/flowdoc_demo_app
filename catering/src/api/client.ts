@@ -167,7 +167,7 @@ export async function getOrderConfig(): Promise<{ minOrderValue: number; minLead
 }
 
 export async function getCompanySettings(): Promise<{ privacyPolicyUrl?: string | null; [key: string]: unknown }> {
-  return request("/api/company-settings");
+  return request("/api/settings-company");
 }
 
 export async function getDeliveryZones(): Promise<unknown[]> {
