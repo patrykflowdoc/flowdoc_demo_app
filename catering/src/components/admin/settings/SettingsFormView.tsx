@@ -115,28 +115,36 @@ const SettingsFormView = () => {
         const exCats = (Array.isArray(exCatsRes) ? exCatsRes : []) as Record<string, unknown>[];
         const exMappings = (Array.isArray(exMappingsRes) ? exMappingsRes : []) as Record<string, unknown>[];
 
-        setCategories(cats.map((c) => {
+        const categoryIconErrors: string[] = [];
+        const mappedCategories: ProductCategory[] = [];
+        for (const c of cats) {
           const iconName = String(c.icon ?? "");
           if (!(iconName in icons)) {
-            throw new Error(`Nieznana ikona kategorii produktu: "${iconName}" (id: ${String(c.id)})`);
+            categoryIconErrors.push(`produkt id=${String(c.id)} icon="${iconName}"`);
+            continue;
           }
-          return {
+          mappedCategories.push({
             id: String(c.id), name: String(c.name ?? ""), description: String(c.description ?? ""),
             icon: iconName as LucideIconName, slug: String(c.slug ?? ""),
-          };
-        }));
+          });
+        }
+        setCategories(mappedCategories);
 
-        setExtrasCategories(exCats.map((c) => {
+        const extrasIconErrors: string[] = [];
+        const mappedExtrasCategories: ExtrasCategory[] = [];
+        for (const c of exCats) {
           const iconName = String(c.icon ?? "");
           if (!(iconName in icons)) {
-            throw new Error(`Nieznana ikona kategorii dodatków: "${iconName}" (id: ${String(c.id)})`);
+            extrasIconErrors.push(`dodatek id=${String(c.id)} icon="${iconName}"`);
+            continue;
           }
-          return {
+          mappedExtrasCategories.push({
             id: String(c.id), name: String(c.name ?? ""), description: String(c.description ?? ""),
             icon: iconName as LucideIconName, slug: String(c.slug ?? ""),
             isRequired: Boolean(c.isRequired),
-          };
-        }));
+          });
+        }
+        setExtrasCategories(mappedExtrasCategories);
 
         const mappingsByEvent: Record<string, string[]> = {};
         mappings.forEach((m) => {
@@ -152,18 +160,28 @@ const SettingsFormView = () => {
           if (!extrasMappingsByEvent[eid]) extrasMappingsByEvent[eid] = [];
           extrasMappingsByEvent[eid].push(exid);
         });
-        setEvents(evts.map((e) => {
+        const eventIconErrors: string[] = [];
+        const mappedEvents: EventType[] = [];
+        for (const e of evts) {
           const iconName = String(e.icon ?? "");
           if (!(iconName in icons)) {
-            throw new Error(`Nieznana ikona typu wydarzenia: "${iconName}" (id: ${String(e.id)})`);
+            eventIconErrors.push(`wydarzenie id=${String(e.id)} icon="${iconName}"`);
+            continue;
           }
-          return {
+          mappedEvents.push({
             id: String(e.id), name: String(e.name ?? ""),
             icon: iconName as LucideIconName,
             allowedCategoryIds: mappingsByEvent[String(e.id)] || [],
             allowedExtrasCategoryIds: extrasMappingsByEvent[String(e.id)] || [],
-          };
-        }));
+          });
+        }
+        setEvents(mappedEvents);
+
+        const allIconErrors = [...categoryIconErrors, ...extrasIconErrors, ...eventIconErrors];
+        if (allIconErrors.length > 0) {
+          toast.error(`Pominięto rekordy z nieznaną ikoną (${allIconErrors.length}). Szczegóły w konsoli.`);
+          console.error("[SettingsFormView] Nieznane ikony:", allIconErrors);
+        }
       } catch (err: unknown) {
         toast.error("Błąd ładowania formularza: " + (err instanceof Error ? err.message : String(err)));
       } finally {
